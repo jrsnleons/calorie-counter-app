@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>AI Calorie Lens</title>
+        <style>
+            body {
+                font-family: sans-serif;
+                max-width: 700px;
+                margin: 2rem auto;
+                padding: 0 1rem;
+                color: #333;
+            }
+            textarea {
+                width: 100%;
+                height: 80px;
+                padding: 10px;
+                margin-bottom: 10px;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+            }
+
+            /* Image Upload Styles */
+            .upload-box {
+                border: 2px dashed #ccc;
+                padding: 20px;
+                text-align: center;
+                margin-bottom: 20px;
+                border-radius: 8px;
+                cursor: pointer;
+            }
+            .upload-box:hover {
+                background: #f9f9f9;
+                border-color: #007bff;
+            }
+            #image-preview {
+                max-width: 100%;
+                max-height: 300px;
+                border-radius: 8px;
+                margin-top: 10px;
+                display: none;
+            }
+
+            button {
+                width: 100%;
+                background: #007bff;
+                color: white;
+                padding: 14px;
+                border: none;
+                cursor: pointer;
+                border-radius: 8px;
+                font-size: 16px;
+            }
+            button:hover {
+                background: #0056b3;
+            }
+            button:disabled {
+                background: #ccc;
+            }
+
+            /* Table Styles */
+            #result-container {
+                display: none;
+                margin-top: 30px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+            }
+            th,
+            td {
+                padding: 10px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }
+            th {
+                background-color: #f8f9fa;
+            }
+            .summary {
+                background: #eef7ff;
+                padding: 15px;
+                border-radius: 4px;
+                color: #004085;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>📸 AI Calorie Lens</h1>
+
+        <div
+            class="upload-box"
+            onclick="document.getElementById('fileInput').click()"
+        >
+            <p>📸 Click to upload food photo</p>
+            <input
+                type="file"
+                id="fileInput"
+                accept="image/*"
+                style="display: none"
+                onchange="previewImage()"
+            />
+            <img id="image-preview" src="" alt="Preview" />
+        </div>
+
+        <textarea
+            id="foodInput"
+            placeholder="Optional notes (e.g. 'I didn't eat the bread')"
+        ></textarea>
+
+        <button id="analyzeBtn" onclick="analyzeFood()">Analyze Meal</button>
+
+        <div id="result-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Cals</th>
+                        <th>Prot</th>
+                        <th>Carb</th>
+                        <th>Fat</th>
+                    </tr>
+                </thead>
+                <tbody id="items-list"></tbody>
+                <tfoot>
+                    <tr>
+                        <td><b>TOTAL</b></td>
+                        <td id="total-cals">0</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div class="summary" id="ai-summary"></div>
+        </div>
+
+        <script>
+            let base64Image = ""; // This will hold the image string
+
+            // A. Handle Image Selection
+            function previewImage() {
+                const file = document.getElementById("fileInput").files[0];
+                if (!file) return;
+
+                // Use FileReader to convert image to Base64 string
+                const reader = new FileReader();
+                reader.onloadend = function () {
+                    document.getElementById("image-preview").style.display =
+                        "block";
+                    document.getElementById("image-preview").src =
+                        reader.result;
+
+                    // Remove the "data:image/jpeg;base64," part so we just send the raw code
+                    base64Image = reader.result.split(",")[1];
+                };
+                reader.readAsDataURL(file);
+            }
+
+            // B. Send to Server
+            async function analyzeFood() {
+                const input = document.getElementById("foodInput").value;
+                const btn = document.getElementById("analyzeBtn");
+                const resultDiv = document.getElementById("result-container");
+                const tbody = document.getElementById("items-list");
+
+                if (!input && !base64Image) {
+                    alert("Please add a photo or text!");
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.innerText = "Scanning...";
+                tbody.innerHTML = "";
+                resultDiv.style.display = "none";
+
+                try {
+                    const response = await fetch("/api/analyze", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            food: input,
+                            image: base64Image, // Sending the image data here
+                        }),
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+
+                    // Build Table
+                    if (data.items) {
+                        data.items.forEach((item) => {
+                            tbody.innerHTML += `
+                            <tr>
+                                <td>${item.name}</td>
+                                <td>${item.calories}</td>
+                                <td>${item.protein}</td>
+                                <td>${item.carbs}</td>
+                                <td>${item.fat}</td>
+                            </tr>`;
+                        });
+                        document.getElementById("total-cals").innerText =
+                            data.total_calories;
+                        document.getElementById("ai-summary").innerText =
+                            data.summary;
+                        resultDiv.style.display = "block";
+                    }
+                } catch (error) {
+                    alert("Error: " + error.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = "Analyze Meal";
+                }
+            }
+        </script>
+    </body>
+</html>
