@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 280 40% 98%;
+        --foreground: 280 40% 5%;
+        --card: 0 0% 100%;
+        --card-foreground: 280 40% 5%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 280 40% 5%;
+        --primary: 280 80% 55%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 280 20% 95%;
+        --secondary-foreground: 280 40% 10%;
+        --muted: 280 20% 95%;
+        --muted-foreground: 280 10% 40%;
+        --accent: 280 20% 95%;
+        --accent-foreground: 280 40% 10%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 280 20% 90%;
+        --input: 280 20% 90%;
+        --ring: 280 80% 55%;
+        --radius: 1rem;
+        --chart-1: 280 80% 55%;
+        --chart-2: 320 80% 55%;
+        --chart-3: 240 80% 55%;
+        --chart-4: 200 80% 55%;
+        --chart-5: 260 80% 55%;
+    }
+    .dark {
+        --background: 280 40% 5%;
+        --foreground: 280 10% 98%;
+        --card: 280 40% 8%;
+        --card-foreground: 280 10% 98%;
+        --popover: 280 40% 8%;
+        --popover-foreground: 280 10% 98%;
+        --primary: 280 80% 55%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 280 20% 15%;
+        --secondary-foreground: 280 10% 98%;
+        --muted: 280 20% 15%;
+        --muted-foreground: 280 10% 60%;
+        --accent: 280 20% 15%;
+        --accent-foreground: 280 10% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 280 20% 18%;
+        --input: 280 20% 18%;
+        --ring: 280 80% 55%;
+        --chart-1: 280 80% 65%;
+        --chart-2: 320 80% 65%;
+        --chart-3: 240 80% 65%;
+        --chart-4: 200 80% 65%;
+        --chart-5: 260 80% 65%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+@keyframes shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-5px);
+    }
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(5px);
+    }
+}
+.animate-shake {
+    animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
