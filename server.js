@@ -29,15 +29,15 @@ app.use(
     session({
         store: new pgSession({
             pool: db.pool, // Access the underlying pool from database.js
-            tableName: 'session',
-            createTableIfMissing: true
+            tableName: "session",
+            createTableIfMissing: true,
         }),
         secret: process.env.SESSION_SECRET || "supersecretkey123",
         resave: false,
         saveUninitialized: false,
         cookie: {
-            secure: process.env.NODE_ENV === "production", 
-            maxAge: 30 * 24 * 60 * 60 * 1000, 
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 30 * 24 * 60 * 60 * 1000,
         },
     })
 );
@@ -64,9 +64,10 @@ app.post("/api/auth/google", async (req, res) => {
         const googlePicture = payload.picture;
 
         // B. Check if user exists in OUR database
-        const userRes = await db.query(`SELECT * FROM users WHERE username = $1`, [
-            googleEmail,
-        ]);
+        const userRes = await db.query(
+            `SELECT * FROM users WHERE username = $1`,
+            [googleEmail]
+        );
         let user = userRes.rows[0];
 
         if (!user) {
@@ -77,11 +78,10 @@ app.post("/api/auth/google", async (req, res) => {
             user = result.rows[0];
         } else {
             // Update name/avatar
-            await db.query(`UPDATE users SET name = $1, avatar = $2 WHERE id = $3`, [
-                googleName,
-                googlePicture,
-                user.id,
-            ]);
+            await db.query(
+                `UPDATE users SET name = $1, avatar = $2 WHERE id = $3`,
+                [googleName, googlePicture, user.id]
+            );
         }
 
         // D. Create Session (Log them in)
@@ -111,7 +111,7 @@ app.post("/api/register", async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         // Postgres unique violation code is 23505
-        if (err.code === '23505')
+        if (err.code === "23505")
             return res.status(400).json({ error: "Username taken" });
         res.status(500).json({ error: "Server Error" });
     }
@@ -121,9 +121,10 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
     try {
         const { username, password } = req.body;
-        const userRes = await db.query(`SELECT * FROM users WHERE username = $1`, [
-            username,
-        ]);
+        const userRes = await db.query(
+            `SELECT * FROM users WHERE username = $1`,
+            [username]
+        );
         const user = userRes.rows[0];
 
         if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -331,32 +332,6 @@ app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
 
-
-// ... (Keep your existing Middleware and Session setup exactly the same) ...
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.static("public"));
-
-app.get("/api/config", (req, res) => {
-    res.json({
-        googleClientId: process.env.GOOGLE_CLIENT_ID,
-    });
-});
-
-app.use(
-    session({
-        store: new SQLiteStore({ db: "sessions.db", dir: "." }),
-        secret: "secret_key",
-        resave: false,
-        saveUninitialized: false,
-        cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 },
-    })
-);
-
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-// --- AUTH ROUTES ---
 
 app.get("/api/config", (req, res) => {
     res.json({
