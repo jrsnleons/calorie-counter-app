@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Meal, User, WeightLog } from "@/types";
+import type { Meal, User, WeightLog } from "@/types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     Calendar,

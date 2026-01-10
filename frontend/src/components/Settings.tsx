@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { User } from "@/types";
+import type { User } from "@/types";
 import { ArrowLeft } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
