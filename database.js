@@ -5,7 +5,11 @@ require("dotenv").config();
 // On Neon/Render, DATABASE_URL will be provided.
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
+    ssl:
+        process.env.DATABASE_URL &&
+        process.env.DATABASE_URL.includes("localhost")
+            ? false
+            : { rejectUnauthorized: false },
 });
 
 const initializeDB = async () => {
@@ -65,10 +69,16 @@ const initializeDB = async () => {
         `);
         // Add constraint separately to avoid error if it exists
         try {
-             await pool.query(`ALTER TABLE session ADD CONSTRAINT session_pkey PRIMARY KEY (sid) NOT DEFERRABLE INITIALLY IMMEDIATE;`);
-        } catch (e) { /* ignore if exists */ }
+            await pool.query(
+                `ALTER TABLE session ADD CONSTRAINT session_pkey PRIMARY KEY (sid) NOT DEFERRABLE INITIALLY IMMEDIATE;`
+            );
+        } catch (e) {
+            /* ignore if exists */
+        }
 
-        await pool.query(`CREATE INDEX IF NOT EXISTS IDX_session_expire ON session ("expire");`);
+        await pool.query(
+            `CREATE INDEX IF NOT EXISTS IDX_session_expire ON session ("expire");`
+        );
 
         console.log("Database initialized successfully");
     } catch (err) {
