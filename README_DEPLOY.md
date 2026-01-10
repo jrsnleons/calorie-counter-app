@@ -22,8 +22,7 @@ This project is configured to be deployed for **free** using [Render.com](https:
     *   **Branch:** `main` (or master)
     *   **Root Directory:** (Leave blank)
     *   **Runtime:** `Node`
-    *   **Build Command:** `npm install && npm run build`
-        *   *(This installs backend deps, then builds the frontend and moves it to the backend's public folder)*
+    *   **Build Command:** `npm install && npm run build` (Make sure not to copy any backticks!)
     *   **Start Command:** `npm start`
     *   **Instance Type:** Free
 
