@@ -1,0 +1,19 @@
+{
+    "name": "pakals-backend",
+    "version": "1.0.0",
+    "dependencies": {
+        "@google/generative-ai": "^0.24.1",
+        "bcryptjs": "^3.0.3",
+        "connect-pg-simple": "^10.0.0",
+        "pg": "^8.13.1",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.2.1",
+        "express-session": "^1.18.2",
+        "google-auth-library": "^10.5.0"
+    },
+    "scripts": {
+        "start": "node server.js",
+        "build": "cd frontend && npm install && npm run build && cd .. && rm -rf public && mkdir public && cp -r frontend/dist/* public/"
+    }
+}
