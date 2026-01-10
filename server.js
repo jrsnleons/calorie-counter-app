@@ -32,13 +32,17 @@ app.use(
             pool: db.pool, // Access the underlying pool from database.js
             tableName: "session",
             createTableIfMissing: true,
+            errorLog: (err) => console.error("Session Store Error:", err), // Help debug DB issues
         }),
         secret: process.env.SESSION_SECRET || "supersecretkey123",
         resave: false,
         saveUninitialized: false,
+        proxy: true, // Important for Render/Heroku SSL
         cookie: {
             secure: process.env.NODE_ENV === "production",
             maxAge: 30 * 24 * 60 * 60 * 1000,
+            sameSite: "lax", // Ensure cookie works on same-domain
+            httpOnly: true,
         },
     })
 );
