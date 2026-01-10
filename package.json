@@ -10,15 +10,7 @@
         "express": "^5.2.1",
         "express-session": "^1.18.2",
         "google-auth-library": "^10.5.0",
-        "pg": "^8.13.1"
-    },
-    "scripts": {
-        "start": "node dist/setup_db.js && node dist/server.js",
-        "dev": "ts-node src/server.ts",
-        "build": "tsc && cd frontend && npm install --production=false && npm run build && cd .. && rm -rf public && mkdir public && cp -r frontend/dist/* public/",
-        "db:setup": "ts-node src/setup_db.ts"
-    },
-    "devDependencies": {
+        "pg": "^8.13.1",
         "@types/bcryptjs": "^2.4.6",
         "@types/connect-pg-simple": "^7.0.3",
         "@types/cors": "^2.8.19",
@@ -28,5 +20,12 @@
         "@types/pg": "^8.16.0",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
-    }
+    },
+    "scripts": {
+        "start": "node dist/setup_db.js && node dist/server.js",
+        "dev": "ts-node src/server.ts",
+        "build": "tsc && cd frontend && npm install --production=false && npm run build && cd .. && rm -rf public && mkdir public && cp -r frontend/dist/* public/",
+        "db:setup": "ts-node src/setup_db.ts"
+    },
+    "devDependencies": {}
 }
