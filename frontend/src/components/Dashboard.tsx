@@ -29,6 +29,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
     Calendar,
     Camera,
+    ChevronLeft,
+    ChevronRight,
     Home,
     Loader2,
     LogOut,
@@ -64,6 +66,9 @@ export function Dashboard({
     const [analyzing, setAnalyzing] = useState(false);
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [history, setHistory] = useState<Meal[]>([]);
+    const [currentDate, setCurrentDate] = useState(
+        new Date().toISOString().split("T")[0]
+    );
 
     // New States for Tabs/Features
     const [activeTab, setActiveTab] = useState<"home" | "history" | "weight">(
@@ -81,32 +86,51 @@ export function Dashboard({
 
     // Phase 2: Calculations
     const tdee = user.tdee || 2000;
+
+    function isSameDate(date1: string, date2: string) {
+        return date1 === date2;
+    }
+
     const todayCalories = history.reduce(
         (acc, curr) =>
-            isToday(curr.date) ? acc + (Number(curr.calories) || 0) : acc,
+            isSameDate(curr.date, currentDate)
+                ? acc + (Number(curr.calories) || 0)
+                : acc,
         0
     );
     const progress = Math.min((tdee > 0 ? todayCalories / tdee : 0) * 100, 100);
     const remaining = tdee - todayCalories;
 
-    function isToday(dateStr: string) {
-        const today = new Date().toISOString().split("T")[0];
-        return dateStr === today;
-    }
-
     const groupedMeals = {
         Breakfast: history.filter(
-            (m) => m.meal_type === "Breakfast" && isToday(m.date)
+            (m) =>
+                m.meal_type === "Breakfast" && isSameDate(m.date, currentDate)
         ),
         Lunch: history.filter(
-            (m) => m.meal_type === "Lunch" && isToday(m.date)
+            (m) => m.meal_type === "Lunch" && isSameDate(m.date, currentDate)
         ),
         Dinner: history.filter(
-            (m) => m.meal_type === "Dinner" && isToday(m.date)
+            (m) =>
+                m.meal_type === "Dinner" && isSameDate(m.date, currentDate)
         ),
         Snack: history.filter(
-            (m) => (m.meal_type === "Snack" || !m.meal_type) && isToday(m.date)
+            (m) =>
+                (m.meal_type === "Snack" || !m.meal_type) &&
+                isSameDate(m.date, currentDate)
         ),
+    };
+
+    // Date Navigation Handlers
+    const goToPreviousDay = () => {
+        const date = new Date(currentDate);
+        date.setDate(date.getDate() - 1);
+        setCurrentDate(date.toISOString().split("T")[0]);
+    };
+
+    const goToNextDay = () => {
+        const date = new Date(currentDate);
+        date.setDate(date.getDate() + 1);
+        setCurrentDate(date.toISOString().split("T")[0]);
     };
 
     useEffect(() => {
@@ -241,11 +265,11 @@ export function Dashboard({
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3 }}
-                    className={`max-w-2xl mx-auto p-4 space-y-6 pb-20 ${
+                    className={`max-w-2xl mx-auto p-4 space-y-8 pb-20 ${
                         shake ? "animate-shake" : ""
                     }`}
                 >
-                    <div className="flex justify-between items-center bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md p-4 rounded-3xl shadow-lg border border-purple-100 dark:border-purple-900 sticky top-4 z-10 transition-all duration-300">
+                    <div className="flex justify-between items-center bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl p-4 rounded-3xl shadow-lg border border-white/20 dark:border-white/10 sticky top-4 z-50 transition-all duration-300">
                         <div className="flex items-center gap-3">
                             <img
                                 src="/logo.svg"
@@ -309,7 +333,7 @@ export function Dashboard({
                     </div>
 
                     {activeTab === "home" && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {/* Dashboard Hero: Progress Ring */}
                             <Card className="rounded-[2rem] border-none shadow-xl bg-gradient-to-br from-purple-600 to-fuchsia-700 text-white overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
@@ -344,33 +368,53 @@ export function Dashboard({
                                                     (1 - progress / 100)
                                                 }
                                                 strokeLinecap="round"
-                                                className="text-white transition-all duration-1000 ease-out"
+                                                className={`${
+                                                    remaining < 0
+                                                        ? "text-red-400"
+                                                        : "text-white"
+                                                } transition-all duration-1000 ease-out`}
                                             />
                                         </svg>
                                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                                             <span className="text-5xl font-bold tracking-tighter">
-                                                {remaining}
+                                                {todayCalories}
                                             </span>
                                             <span className="text-sm font-medium opacity-80 uppercase tracking-widest mt-1">
-                                                Left
+                                                Eaten
                                             </span>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-8 mt-6 w-full text-center">
                                         <div>
                                             <div className="text-xs opacity-70 uppercase tracking-wider">
-                                                Eaten
-                                            </div>
-                                            <div className="text-xl font-bold">
-                                                {todayCalories}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs opacity-70 uppercase tracking-wider">
                                                 Goal
                                             </div>
                                             <div className="text-xl font-bold">
                                                 {tdee}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div
+                                                className={`text-xs opacity-70 uppercase tracking-wider ${
+                                                    remaining < 0
+                                                        ? "text-red-200"
+                                                        : ""
+                                                }`}
+                                            >
+                                                {remaining < 0
+                                                    ? "Over Limit"
+                                                    : "Remaining"}
+                                            </div>
+                                            <div
+                                                className={`text-xl font-bold ${
+                                                    remaining < 0
+                                                        ? "text-red-200"
+                                                        : ""
+                                                }`}
+                                            >
+                                                {remaining < 0
+                                                    ? `+${Math.abs(remaining)}`
+                                                    : remaining}
                                             </div>
                                         </div>
                                     </div>
@@ -592,9 +636,46 @@ export function Dashboard({
                                 </CardContent>
                             </Card>
 
-                            <h2 className="text-xl font-semibold px-1">
-                                📅 Daily Log
-                            </h2>
+                            <div className="flex items-center justify-between px-1">
+                                <h2 className="text-xl font-semibold">
+                                    📅 Daily Log
+                                </h2>
+                                <div className="flex items-center bg-gray-100 dark:bg-zinc-800 rounded-full p-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-full"
+                                        onClick={goToPreviousDay}
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <span className="text-xs font-medium px-2 min-w-[80px] text-center">
+                                        {new Date(currentDate).toLocaleDateString(
+                                            undefined,
+                                            {
+                                                month: "short",
+                                                day: "numeric",
+                                            }
+                                        )}
+                                        {currentDate ===
+                                            new Date()
+                                                .toISOString()
+                                                .split("T")[0] && " (Today)"}
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-full"
+                                        onClick={goToNextDay}
+                                        disabled={
+                                            currentDate ===
+                                            new Date().toISOString().split("T")[0]
+                                        }
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
                             <div className="space-y-6">
                                 {/* Replaced history with grouped view above */}
                                 {(
@@ -874,7 +955,7 @@ export function Dashboard({
 
                     <div className="h-24" />
 
-                    <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 p-2 pb-8 flex justify-around items-center z-50">
+                    <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 p-2 pb-6 md:pb-2 flex justify-around items-center z-50">
                         <button
                             onClick={() => setActiveTab("home")}
                             className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-20 ${

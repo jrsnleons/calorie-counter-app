@@ -216,7 +216,7 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             cleanImage = image.split("base64,")[1];
         }
 
-        const prompt = `
+        let finalPrompt = `
         Analyze this meal. Return a strict JSON object with no markdown formatting.
         Structure:
         {
@@ -229,8 +229,12 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             "summary": "string"
         }`;
 
-        const inputParts: any[] = [prompt];
-        if (food) inputParts.push(food);
+        if (food) {
+            finalPrompt += `\n\nUser Description: ${food}`;
+        }
+
+        const inputParts: any[] = [finalPrompt];
+        
         if (cleanImage) {
             inputParts.push({
                 inlineData: { data: cleanImage, mimeType: "image/jpeg" },
@@ -243,7 +247,7 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         // Robust JSON extraction
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found in response");
-        
+
         const data = JSON.parse(jsonMatch[0]);
 
         const today = new Date().toISOString().split("T")[0];
