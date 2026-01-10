@@ -1,9 +1,7 @@
 "use strict";
-var __importDefault =
-    (this && this.__importDefault) ||
-    function (mod) {
-        return mod && mod.__esModule ? mod : { default: mod };
-    };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const generative_ai_1 = require("@google/generative-ai");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
@@ -37,29 +35,28 @@ app.get("/api/config", (req, res) => {
         googleClientId: process.env.GOOGLE_CLIENT_ID,
     });
 });
-app.use(
-    (0, express_session_1.default)({
-        store: new PgSession({
-            pool: database_1.pool,
-            tableName: "session",
-            createTableIfMissing: true,
-            errorLog: (err) => console.error("Session Store Error:", err),
-        }),
-        secret: process.env.SESSION_SECRET || "supersecretkey123",
-        resave: false,
-        saveUninitialized: false,
-        proxy: true,
-        cookie: {
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 30 * 24 * 60 * 60 * 1000,
-            sameSite: "lax",
-            httpOnly: true,
-        },
-    })
-);
+app.use((0, express_session_1.default)({
+    store: new PgSession({
+        pool: database_1.pool,
+        tableName: "session",
+        createTableIfMissing: true,
+        errorLog: (err) => console.error("Session Store Error:", err),
+    }),
+    secret: process.env.SESSION_SECRET || "supersecretkey123",
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    cookie: {
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: "lax",
+        httpOnly: true,
+    },
+}));
 // Initialize Gemini AI
 const apiKey = process.env.API_KEY || "";
-if (!apiKey) console.warn("API_KEY for Gemini is missing");
+if (!apiKey)
+    console.warn("API_KEY for Gemini is missing");
 const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 // --- AUTH ROUTES ---
@@ -81,26 +78,24 @@ app.post("/api/auth/google", async (req, res) => {
         const googleEmail = payload.email;
         const googleName = payload.name;
         const googlePicture = payload.picture;
-        const userRes = await (0, database_1.query)(
-            `SELECT * FROM users WHERE username = $1`,
-            [googleEmail]
-        );
+        const userRes = await (0, database_1.query)(`SELECT * FROM users WHERE username = $1`, [googleEmail]);
         let user = userRes.rows[0];
         if (!user) {
-            const result = await (0, database_1.query)(
-                `INSERT INTO users (username, password, name, avatar) VALUES ($1, $2, $3, $4) RETURNING *`,
-                [googleEmail, "GOOGLE_LOGIN_ONLY", googleName, googlePicture]
-            );
+            const result = await (0, database_1.query)(`INSERT INTO users (username, password, name, avatar) VALUES ($1, $2, $3, $4) RETURNING *`, [
+                googleEmail,
+                "GOOGLE_LOGIN_ONLY",
+                googleName,
+                googlePicture,
+            ]);
             user = result.rows[0];
-        } else {
-            await (0, database_1.query)(
-                `UPDATE users SET name = $1, avatar = $2 WHERE id = $3`,
-                [googleName, googlePicture, user.id]
-            );
+        }
+        else {
+            await (0, database_1.query)(`UPDATE users SET name = $1, avatar = $2 WHERE id = $3`, [googleName, googlePicture, user.id]);
         }
         req.session.userId = user.id;
         res.json({ success: true, username: googleEmail });
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Google Auth Error:", error);
         res.status(401).json({ error: "Invalid Google Token" });
     }
@@ -111,13 +106,11 @@ app.post("/api/register", async (req, res) => {
         if (!username || !password)
             return res.status(400).json({ error: "Missing fields" });
         const hash = await bcryptjs_1.default.hash(password, 10);
-        const result = await (0, database_1.query)(
-            `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`,
-            [username, hash]
-        );
+        const result = await (0, database_1.query)(`INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`, [username, hash]);
         req.session.userId = result.rows[0].id;
         res.json({ success: true });
-    } catch (err) {
+    }
+    catch (err) {
         if (err.code === "23505")
             return res.status(400).json({ error: "Username taken" });
         res.status(500).json({ error: "Server Error" });
@@ -126,46 +119,41 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
     try {
         const { username, password } = req.body;
-        const userRes = await (0, database_1.query)(
-            `SELECT * FROM users WHERE username = $1`,
-            [username]
-        );
+        const userRes = await (0, database_1.query)(`SELECT * FROM users WHERE username = $1`, [
+            username,
+        ]);
         const user = userRes.rows[0];
-        if (
-            !user ||
-            !(await bcryptjs_1.default.compare(password, user.password))
-        ) {
+        if (!user || !(await bcryptjs_1.default.compare(password, user.password))) {
             return res.status(401).json({ error: "Invalid credentials" });
         }
         req.session.userId = user.id;
         res.json({ success: true });
-    } catch (err) {
+    }
+    catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server Error" });
     }
 });
 app.post("/api/logout", (req, res) => {
     req.session.destroy((err) => {
-        if (err) console.error("Logout error", err);
+        if (err)
+            console.error("Logout error", err);
         res.json({ success: true });
     });
 });
 app.get("/api/me", async (req, res) => {
-    if (!req.session.userId) return res.json({ loggedIn: false });
-    const result = await (0, database_1.query)(
-        "SELECT * FROM users WHERE id = $1",
-        [req.session.userId]
-    );
+    if (!req.session.userId)
+        return res.json({ loggedIn: false });
+    const result = await (0, database_1.query)("SELECT * FROM users WHERE id = $1", [
+        req.session.userId,
+    ]);
     res.json({ loggedIn: true, user: result.rows[0] });
 });
 // --- APP ROUTES ---
 app.get("/api/history", async (req, res) => {
     if (!req.session.userId)
         return res.status(401).json({ error: "Unauthorized" });
-    const result = await (0, database_1.query)(
-        `SELECT * FROM meals WHERE user_id = $1 ORDER BY id DESC`,
-        [req.session.userId]
-    );
+    const result = await (0, database_1.query)(`SELECT * FROM meals WHERE user_id = $1 ORDER BY id DESC`, [req.session.userId]);
     res.json(result.rows);
 });
 app.post("/api/analyze", async (req, res) => {
@@ -173,51 +161,72 @@ app.post("/api/analyze", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     try {
         const { food, image } = req.body;
+        // 1. Clean the Base64 image string (Remove "data:image/jpeg;base64," prefix)
+        let cleanImage = image;
+        if (image && typeof image === "string" && image.includes("base64,")) {
+            cleanImage = image.split("base64,")[1];
+        }
         const prompt = `
-        Analyze this. Return JSON:
+        Analyze this input (image or text).
+        1. If it's an image, check if it contains food/drink.
+        2. If it's text, check if it describes a edible food item (reject nonsense, insults, or non-food items like "rocks" or "happiness").
+
+        Return a strict JSON object with this structure:
         {
-            "short_title": "A concise 3-5 word name for this meal (e.g. 'Jollibee Burger Meal')",
-            "items": [{"name": "str", "calories": int, "protein": "str", "carbs": "str", "fat": "str"}],
+            "is_food": boolean,
+            "funny_comment": "If is_food is false, write a short, sarcastic roasting comment about why this input is nonsense or not food.",
+            "short_title": "A concise 3-5 word name for this meal",
+            "items": [{"name": "string", "calories": int, "protein": "str", "carbs": "str", "fat": "str"}],
             "total_calories": int,
             "total_protein": "str",
             "total_carbs": "str",
             "total_fat": "str",
-            "summary": "str"
+            "summary": "string"
         }`;
         const inputParts = [prompt];
-        if (food) inputParts.push(food);
-        if (image)
+        if (food)
+            inputParts.push(food);
+        if (cleanImage) {
             inputParts.push({
-                inlineData: { data: image, mimeType: "image/jpeg" },
+                inlineData: { data: cleanImage, mimeType: "image/jpeg" },
             });
+        }
         const result = await model.generateContent(inputParts);
-        const text = result.response
-            .text()
-            .replace(/```json|```/g, "")
-            .trim();
-        const data = JSON.parse(text);
+        const responseText = result.response.text();
+        // Robust JSON extraction
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch)
+            throw new Error("No JSON found in response");
+        const data = JSON.parse(jsonMatch[0]);
+        // Guardrail Check
+        if (data.is_food === false) {
+            return res.json({
+                error: data.funny_comment || "That doesn't look like food!",
+                is_food: false,
+            });
+        }
         const today = new Date().toISOString().split("T")[0];
-        const itemsJson = JSON.stringify(data.items);
+        const itemsJson = JSON.stringify(data.items || []);
         const mealType = req.body.meal_type || "Snack";
-        await (0, database_1.query)(
-            `INSERT INTO meals (user_id, food_name, calories, protein, carbs, fat, items, date, meal_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [
-                req.session.userId,
-                data.short_title || "Scanned Meal",
-                data.total_calories,
-                data.total_protein,
-                data.total_carbs,
-                data.total_fat,
-                itemsJson,
-                today,
-                mealType,
-            ]
-        );
+        // Safely parse calories to integer
+        const calories = parseInt(String(data.total_calories || 0));
+        await (0, database_1.query)(`INSERT INTO meals (user_id, food_name, calories, protein, carbs, fat, items, date, meal_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [
+            req.session.userId,
+            data.short_title || "Scanned Meal",
+            calories,
+            String(data.total_protein || "0g"),
+            String(data.total_carbs || "0g"),
+            String(data.total_fat || "0g"),
+            itemsJson,
+            today,
+            mealType,
+        ]);
         data.meal_type = mealType;
         res.json(data);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "AI Error" });
+    }
+    catch (error) {
+        console.error("AI Analysis Error:", error);
+        res.status(500).json({ error: "Failed to analyze meal" });
     }
 });
 app.delete("/api/history/:id", async (req, res) => {
@@ -225,12 +234,13 @@ app.delete("/api/history/:id", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     const mealId = req.params.id;
     try {
-        await (0, database_1.query)(
-            `DELETE FROM meals WHERE id = $1 AND user_id = $2`,
-            [mealId, req.session.userId]
-        );
+        await (0, database_1.query)(`DELETE FROM meals WHERE id = $1 AND user_id = $2`, [
+            mealId,
+            req.session.userId,
+        ]);
         res.json({ success: true });
-    } catch (error) {
+    }
+    catch (error) {
         res.status(500).json({ error: "Could not delete" });
     }
 });
@@ -238,12 +248,10 @@ app.get("/api/weight", async (req, res) => {
     if (!req.session.userId)
         return res.status(401).json({ error: "Unauthorized" });
     try {
-        const result = await (0, database_1.query)(
-            "SELECT * FROM weight_logs WHERE user_id = $1 ORDER BY date DESC",
-            [req.session.userId]
-        );
+        const result = await (0, database_1.query)("SELECT * FROM weight_logs WHERE user_id = $1 ORDER BY date DESC", [req.session.userId]);
         res.json(result.rows);
-    } catch (e) {
+    }
+    catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
@@ -252,39 +260,34 @@ app.post("/api/weight", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     const { weight, date } = req.body;
     try {
-        await (0, database_1.query)(
-            "INSERT INTO weight_logs (user_id, weight, date) VALUES ($1, $2, $3)",
-            [req.session.userId, weight, date]
-        );
-        await (0, database_1.query)(
-            "UPDATE users SET weight = $1 WHERE id = $2",
-            [weight, req.session.userId]
-        );
-        if (req.session.user) req.session.user.weight = weight;
+        await (0, database_1.query)("INSERT INTO weight_logs (user_id, weight, date) VALUES ($1, $2, $3)", [req.session.userId, weight, date]);
+        await (0, database_1.query)("UPDATE users SET weight = $1 WHERE id = $2", [
+            weight,
+            req.session.userId,
+        ]);
+        if (req.session.user)
+            req.session.user.weight = weight;
         res.json({ success: true });
-    } catch (e) {
+    }
+    catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 app.post("/api/user/onboarding", async (req, res) => {
     if (!req.session.userId)
         return res.status(401).json({ error: "Unauthorized" });
-    const { height, weight, age, gender, activity_level, goal, tdee } =
-        req.body;
+    const { height, weight, age, gender, activity_level, goal, tdee } = req.body;
     try {
-        await (0, database_1.query)(
-            `UPDATE users SET height = $1, weight = $2, age = $3, gender = $4, activity_level = $5, goal = $6, tdee = $7 WHERE id = $8`,
-            [
-                height,
-                weight,
-                age,
-                gender,
-                activity_level,
-                goal,
-                tdee,
-                req.session.userId,
-            ]
-        );
+        await (0, database_1.query)(`UPDATE users SET height = $1, weight = $2, age = $3, gender = $4, activity_level = $5, goal = $6, tdee = $7 WHERE id = $8`, [
+            height,
+            weight,
+            age,
+            gender,
+            activity_level,
+            goal,
+            tdee,
+            req.session.userId,
+        ]);
         req.session.user = {
             ...req.session.user,
             height,
@@ -296,9 +299,82 @@ app.post("/api/user/onboarding", async (req, res) => {
             tdee,
         };
         res.json({ success: true });
-    } catch (e) {
+    }
+    catch (e) {
         console.error(e);
         res.status(500).json({ error: "Database error" });
+    }
+});
+// Update User Profile & Calculate TDEE
+app.put("/api/user", async (req, res) => {
+    if (!req.session.userId)
+        return res.status(401).json({ error: "Unauthorized" });
+    const { name, height, weight, age, gender, activity_level } = req.body;
+    try {
+        // Calculate TDEE using Mifflin-St Jeor Equation
+        let bmr = 0;
+        if (gender === "Male") {
+            bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+        }
+        else {
+            bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+        }
+        let multiplier = 1.2; // Sedentary
+        switch (activity_level) {
+            case "Light":
+                multiplier = 1.375;
+                break;
+            case "Moderate":
+                multiplier = 1.55;
+                break;
+            case "Active":
+                multiplier = 1.725;
+                break;
+            case "Very Active":
+                multiplier = 1.9;
+                break;
+        }
+        const tdee = Math.round(bmr * multiplier);
+        await (0, database_1.query)(`UPDATE users SET name=$1, height=$2, weight=$3, age=$4, gender=$5, activity_level=$6, tdee=$7 WHERE id=$8`, [
+            name,
+            height,
+            weight,
+            age,
+            gender,
+            activity_level,
+            tdee,
+            req.session.userId,
+        ]);
+        res.json({ success: true, tdee });
+    }
+    catch (err) {
+        console.error("Update User Error:", err);
+        res.status(500).json({ error: "Failed to update profile" });
+    }
+});
+// Update Meal
+app.put("/api/history/:id", async (req, res) => {
+    if (!req.session.userId)
+        return res.status(401).json({ error: "Unauthorized" });
+    const mealId = req.params.id;
+    const { food_name, calories, protein, carbs, fat, meal_type, items } = req.body;
+    try {
+        await (0, database_1.query)(`UPDATE meals SET food_name=$1, calories=$2, protein=$3, carbs=$4, fat=$5, meal_type=$6, items=$7 WHERE id=$8 AND user_id=$9`, [
+            food_name,
+            calories,
+            protein,
+            carbs,
+            fat,
+            meal_type,
+            items ? JSON.stringify(items) : null,
+            mealId,
+            req.session.userId,
+        ]);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Update Error:", error);
+        res.status(500).json({ error: "Could not update meal" });
     }
 });
 app.listen(PORT, () => {

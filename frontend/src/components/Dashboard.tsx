@@ -35,6 +35,7 @@ import {
     Loader2,
     LogOut,
     Pencil,
+    Plus,
     Scale,
     Settings as SettingsIcon,
     Trash2,
@@ -248,9 +249,38 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     };
 
     const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+    const [editItems, setEditItems] = useState<{ name: string; calories: number }[]>([]);
 
-    const handleUpdateMeal = async () => {
+    useEffect(() => {
+        if (editingMeal?.id) {
+            try {
+                const parsed = editingMeal.items ? JSON.parse(editingMeal.items) : [];
+                setEditItems(parsed);
+            } catch {
+                setEditItems([]);
+            }
+        } else {
+            setEditItems([]);
+        }
+    }, [editingMeal?.id]);
+
+    const updateEditItems = (newItems: { name: string; calories: number }[]) => {
+        setEditItems(newItems);
+        const newTotal = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+        
+        if (editingMeal) {
+            setEditingMeal({
+                ...editingMeal,
+                calories: newTotal, // Update total calories
+                items: JSON.stringify(newItems) // Update items string
+            });
+        }
+    };
+
+    const handleUpdateMeal = async (e?: React.MouseEvent) => {
+        e?.preventDefault();
         if (!editingMeal) return;
+
         try {
             const res = await fetch(`/api/history/${editingMeal.id}`, {
                 method: "PUT",
@@ -1171,11 +1201,105 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     />
                                 </div>
                             </div>
-                        </div>
 
-                        <Button className="w-full" onClick={handleUpdateMeal}>
-                            Save Changes
-                        </Button>
+                            {/* Item Breakdown */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Item Breakdown
+                                    </label>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        type="button"
+                                        className="h-5 px-2 text-xs"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            updateEditItems([
+                                                ...editItems,
+                                                { name: "New Item", calories: 0 },
+                                            ]);
+                                        }}
+                                    >
+                                        <Plus className="w-3 h-3 mr-1" /> Add
+                                    </Button>
+                                </div>
+                                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                    {editItems.map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex gap-2 items-center"
+                                        >
+                                            <Input
+                                                className="h-8 text-sm flex-1"
+                                                value={item.name}
+                                                onChange={(e) => {
+                                                    const newItems = [...editItems];
+                                                    newItems[idx].name =
+                                                        e.target.value;
+                                                    updateEditItems(newItems);
+                                                }}
+                                            />
+                                            <Input
+                                                className="h-8 text-sm w-20"
+                                                type="number"
+                                                value={item.calories}
+                                                onChange={(e) => {
+                                                    const newItems = [...editItems];
+                                                    newItems[idx].calories = Number(
+                                                        e.target.value
+                                                    );
+                                                    updateEditItems(newItems);
+                                                }}
+                                            />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                type="button"
+                                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    const newItems =
+                                                        editItems.filter(
+                                                            (_, i) => i !== idx
+                                                        );
+                                                    updateEditItems(newItems);
+                                                }}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    {editItems.length === 0 && (
+                                        <p className="text-xs text-center text-gray-400 py-2 border border-dashed rounded-lg">
+                                            No items listed. Add one to track details.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Button
+                                        className="w-full"
+                                        type="button"
+                                        onClick={handleUpdateMeal}
+                                    >
+                                        Save Changes
+                                    </Button>
+                                </div>
+                                <div>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        type="button"
+                                        onClick={() => setEditingMeal(null)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </motion.div>
                 </div>
             )}

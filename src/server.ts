@@ -216,10 +216,15 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             cleanImage = image.split("base64,")[1];
         }
 
-        let finalPrompt = `
-        Analyze this meal. Return a strict JSON object with no markdown formatting.
-        Structure:
+        const prompt = `
+        Analyze this input (image or text).
+        1. If it's an image, check if it contains food/drink.
+        2. If it's text, check if it describes a edible food item (reject nonsense, insults, or non-food items like "rocks" or "happiness").
+
+        Return a strict JSON object with this structure:
         {
+            "is_food": boolean,
+            "funny_comment": "If is_food is false, write a short, sarcastic roasting comment about why this input is nonsense or not food.",
             "short_title": "A concise 3-5 word name for this meal",
             "items": [{"name": "string", "calories": int, "protein": "str", "carbs": "str", "fat": "str"}],
             "total_calories": int,
@@ -229,12 +234,8 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             "summary": "string"
         }`;
 
-        if (food) {
-            finalPrompt += `\n\nUser Description: ${food}`;
-        }
-
-        const inputParts: any[] = [finalPrompt];
-        
+        const inputParts: any[] = [prompt];
+        if (food) inputParts.push(food);
         if (cleanImage) {
             inputParts.push({
                 inlineData: { data: cleanImage, mimeType: "image/jpeg" },
@@ -249,6 +250,14 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         if (!jsonMatch) throw new Error("No JSON found in response");
 
         const data = JSON.parse(jsonMatch[0]);
+
+        // Guardrail Check
+        if (data.is_food === false) {
+            return res.json({
+                error: data.funny_comment || "That doesn't look like food!",
+                is_food: false,
+            });
+        }
 
         const today = new Date().toISOString().split("T")[0];
         const itemsJson = JSON.stringify(data.items || []);
@@ -372,6 +381,95 @@ app.post(
         } catch (e) {
             console.error(e);
             res.status(500).json({ error: "Database error" });
+        }
+    }
+);
+
+// Update User Profile & Calculate TDEE
+app.put("/api/user", async (req: Request, res: Response): Promise<any> => {
+    if (!req.session.userId)
+        return res.status(401).json({ error: "Unauthorized" });
+
+    const { name, height, weight, age, gender, activity_level } = req.body;
+
+    try {
+        // Calculate TDEE using Mifflin-St Jeor Equation
+        let bmr = 0;
+        if (gender === "Male") {
+            bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+        } else {
+            bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+        }
+
+        let multiplier = 1.2; // Sedentary
+        switch (activity_level) {
+            case "Light":
+                multiplier = 1.375;
+                break;
+            case "Moderate":
+                multiplier = 1.55;
+                break;
+            case "Active":
+                multiplier = 1.725;
+                break;
+            case "Very Active":
+                multiplier = 1.9;
+                break;
+        }
+
+        const tdee = Math.round(bmr * multiplier);
+
+        await query(
+            `UPDATE users SET name=$1, height=$2, weight=$3, age=$4, gender=$5, activity_level=$6, tdee=$7 WHERE id=$8`,
+            [
+                name,
+                height,
+                weight,
+                age,
+                gender,
+                activity_level,
+                tdee,
+                req.session.userId,
+            ]
+        );
+
+        res.json({ success: true, tdee });
+    } catch (err) {
+        console.error("Update User Error:", err);
+        res.status(500).json({ error: "Failed to update profile" });
+    }
+});
+
+// Update Meal
+app.put(
+    "/api/history/:id",
+    async (req: Request, res: Response): Promise<any> => {
+        if (!req.session.userId)
+            return res.status(401).json({ error: "Unauthorized" });
+
+        const mealId = req.params.id;
+        const { food_name, calories, protein, carbs, fat, meal_type, items } =
+            req.body;
+
+        try {
+            await query(
+                `UPDATE meals SET food_name=$1, calories=$2, protein=$3, carbs=$4, fat=$5, meal_type=$6, items=$7 WHERE id=$8 AND user_id=$9`,
+                [
+                    food_name,
+                    calories,
+                    protein,
+                    carbs,
+                    fat,
+                    meal_type,
+                    items ? JSON.stringify(items) : null,
+                    mealId,
+                    req.session.userId,
+                ]
+            );
+            res.json({ success: true });
+        } catch (error) {
+            console.error("Update Error:", error);
+            res.status(500).json({ error: "Could not update meal" });
         }
     }
 );
