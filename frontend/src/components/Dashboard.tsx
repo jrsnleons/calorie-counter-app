@@ -34,11 +34,13 @@ import {
     Home,
     Loader2,
     LogOut,
+    Pencil,
     Scale,
     Settings as SettingsIcon,
     Trash2,
     Type,
     Upload,
+    X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -51,13 +53,13 @@ interface AnalysisResult {
     items?: { name: string; calories: number | string }[]; // Add items to interface
 }
 
-export function Dashboard({
-    user,
-    onLogout,
-}: {
+interface DashboardProps {
     user: User;
     onLogout: () => void;
-}) {
+    onUpdateUser: () => void;
+}
+
+export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     const [view, setView] = useState<"dashboard" | "settings">("dashboard");
     const [mode, setMode] = useState<"photo" | "text">("photo");
     const [textInput, setTextInput] = useState("");
@@ -110,8 +112,7 @@ export function Dashboard({
             (m) => m.meal_type === "Lunch" && isSameDate(m.date, currentDate)
         ),
         Dinner: history.filter(
-            (m) =>
-                m.meal_type === "Dinner" && isSameDate(m.date, currentDate)
+            (m) => m.meal_type === "Dinner" && isSameDate(m.date, currentDate)
         ),
         Snack: history.filter(
             (m) =>
@@ -246,6 +247,28 @@ export function Dashboard({
         onLogout();
     };
 
+    const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+
+    const handleUpdateMeal = async () => {
+        if (!editingMeal) return;
+        try {
+            const res = await fetch(`/api/history/${editingMeal.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(editingMeal),
+            });
+            if (res.ok) {
+                toast.success("Meal updated successfully");
+                setEditingMeal(null);
+                loadHistory();
+            } else {
+                toast.error("Failed to update meal");
+            }
+        } catch (e) {
+            toast.error("Error updating meal");
+        }
+    };
+
     return (
         <AnimatePresence mode="wait" initial={false}>
             {view === "settings" ? (
@@ -256,7 +279,11 @@ export function Dashboard({
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                 >
-                    <Settings user={user} onBack={() => setView("dashboard")} />
+                    <Settings
+                        user={user}
+                        onBack={() => setView("dashboard")}
+                        onUpdateUser={onUpdateUser}
+                    />
                 </motion.div>
             ) : (
                 <motion.div
@@ -650,13 +677,12 @@ export function Dashboard({
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
                                     <span className="text-xs font-medium px-2 min-w-[80px] text-center">
-                                        {new Date(currentDate).toLocaleDateString(
-                                            undefined,
-                                            {
-                                                month: "short",
-                                                day: "numeric",
-                                            }
-                                        )}
+                                        {new Date(
+                                            currentDate
+                                        ).toLocaleDateString(undefined, {
+                                            month: "short",
+                                            day: "numeric",
+                                        })}
                                         {currentDate ===
                                             new Date()
                                                 .toISOString()
@@ -669,7 +695,9 @@ export function Dashboard({
                                         onClick={goToNextDay}
                                         disabled={
                                             currentDate ===
-                                            new Date().toISOString().split("T")[0]
+                                            new Date()
+                                                .toISOString()
+                                                .split("T")[0]
                                         }
                                     >
                                         <ChevronRight className="h-4 w-4" />
@@ -707,7 +735,19 @@ export function Dashboard({
                                                     key={meal.id}
                                                     className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-white dark:bg-zinc-900/50 shadow-sm"
                                                 >
-                                                    <div className="absolute bottom-2 right-2">
+                                                    <div className="absolute bottom-2 right-2 flex gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                            onClick={() =>
+                                                                setEditingMeal(
+                                                                    meal
+                                                                )
+                                                            }
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </Button>
                                                         <AlertDialog>
                                                             <AlertDialogTrigger
                                                                 asChild
@@ -997,6 +1037,147 @@ export function Dashboard({
                         </button>
                     </div>
                 </motion.div>
+            )}
+
+            {/* Edit Meal Modal */}
+            {editingMeal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-xl border border-gray-100 dark:border-zinc-800"
+                    >
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-bold text-lg">Edit Meal</h3>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setEditingMeal(null)}
+                            >
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                    Food Name
+                                </label>
+                                <Input
+                                    value={editingMeal.food_name}
+                                    onChange={(e) =>
+                                        setEditingMeal({
+                                            ...editingMeal,
+                                            food_name: e.target.value,
+                                        })
+                                    }
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Calories
+                                    </label>
+                                    <Input
+                                        type="number"
+                                        value={editingMeal.calories}
+                                        onChange={(e) =>
+                                            setEditingMeal({
+                                                ...editingMeal,
+                                                calories: Number(
+                                                    e.target.value
+                                                ),
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Meal Type
+                                    </label>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={editingMeal.meal_type || "Snack"}
+                                        onChange={(e) =>
+                                            setEditingMeal({
+                                                ...editingMeal,
+                                                meal_type: e.target
+                                                    .value as any,
+                                            })
+                                        }
+                                    >
+                                        {[
+                                            "Breakfast",
+                                            "Lunch",
+                                            "Dinner",
+                                            "Snack",
+                                        ].map((t) => (
+                                            <option key={t} value={t}>
+                                                {t}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Prot (g)
+                                    </label>
+                                    <Input
+                                        value={String(
+                                            editingMeal.protein || ""
+                                        ).replace("g", "")}
+                                        onChange={(e) =>
+                                            setEditingMeal({
+                                                ...editingMeal,
+                                                protein: e.target.value + "g",
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Carbs (g)
+                                    </label>
+                                    <Input
+                                        value={String(
+                                            editingMeal.carbs || ""
+                                        ).replace("g", "")}
+                                        onChange={(e) =>
+                                            setEditingMeal({
+                                                ...editingMeal,
+                                                carbs: e.target.value + "g",
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                        Fat (g)
+                                    </label>
+                                    <Input
+                                        value={String(
+                                            editingMeal.fat || ""
+                                        ).replace("g", "")}
+                                        onChange={(e) =>
+                                            setEditingMeal({
+                                                ...editingMeal,
+                                                fat: e.target.value + "g",
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Button className="w-full" onClick={handleUpdateMeal}>
+                            Save Changes
+                        </Button>
+                    </motion.div>
+                </div>
             )}
         </AnimatePresence>
     );

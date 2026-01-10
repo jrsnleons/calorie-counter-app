@@ -84,7 +84,11 @@ function App() {
                 !user.tdee ? (
                     <Onboarding onComplete={handleOnboardingComplete} />
                 ) : (
-                    <Dashboard user={user} onLogout={() => setUser(null)} />
+                    <Dashboard
+                        user={user}
+                        onLogout={() => setUser(null)}
+                        onUpdateUser={checkUser}
+                    />
                 )
             ) : (
                 <Auth onLogin={() => window.location.reload()} />
