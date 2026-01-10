@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Meal, User, WeightLog } from "@/types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     Calendar,
@@ -41,18 +42,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Settings } from "./Settings";
 
-interface Meal {
-    id: number;
-    food_name: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    date: string;
-    items?: string | any[]; // Update type definition
-    meal_type?: string;
-}
-
 interface AnalysisResult {
     short_title: string;
     total_calories: number;
@@ -64,7 +53,7 @@ export function Dashboard({
     user,
     onLogout,
 }: {
-    user: any;
+    user: User;
     onLogout: () => void;
 }) {
     const [view, setView] = useState<"dashboard" | "settings">("dashboard");
@@ -80,7 +69,7 @@ export function Dashboard({
     const [activeTab, setActiveTab] = useState<"home" | "history" | "weight">(
         "home"
     );
-    const [weightLogs, setWeightLogs] = useState<any[]>([]);
+    const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
     const [newWeight, setNewWeight] = useState("");
 
     const [shake, setShake] = useState(false);

@@ -7,6 +7,13 @@ import {
 } from "@/components/ui/card";
 import { useEffect, useRef } from "react";
 
+// Add safe global type definition for Google Auth
+declare global {
+    interface Window {
+        google: any;
+    }
+}
+
 export function Auth({ onLogin }: { onLogin: () => void }) {
     const btnRef = useRef<HTMLDivElement>(null);
 
@@ -18,9 +25,7 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
                 const configRes = await fetch("/api/config");
                 const config = await configRes.json();
 
-                // @ts-ignore
                 if (window.google && btnRef.current) {
-                    // @ts-ignore
                     window.google.accounts.id.initialize({
                         client_id: config.googleClientId,
                         callback: async (response: any) => {
@@ -36,7 +41,6 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
                             else alert("Google Login Failed");
                         },
                     });
-                    // @ts-ignore
                     window.google.accounts.id.renderButton(btnRef.current, {
                         theme: "outline",
                         size: "large",
@@ -50,7 +54,6 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
 
         // Check periodically for google script load if not ready
         timer = setInterval(() => {
-            // @ts-ignore
             if (window.google) {
                 clearInterval(timer);
                 initGoogle();

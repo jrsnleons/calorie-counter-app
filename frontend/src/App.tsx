@@ -3,11 +3,12 @@ import { Dashboard } from "@/components/Dashboard";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
+import { User } from "@/types";
 import { useEffect, useState } from "react";
 import { Onboarding } from "./components/Onboarding";
 
 function App() {
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

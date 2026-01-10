@@ -7,14 +7,24 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { toast } from "sonner"; // Import toast
 
+interface OnboardingData {
+    age: string;
+    gender: string;
+    height: string;
+    weight: string;
+    activity: string;
+    goal: string;
+    tdee: number;
+}
+
 interface OnboardingProps {
-    onComplete: (data: any) => void;
+    onComplete: (data: OnboardingData) => void;
 }
 
 export function Onboarding({ onComplete }: OnboardingProps) {
     const [step, setStep] = useState(0);
     const [shake, setShake] = useState(false); // Add shake state
-    const [data, setData] = useState({
+    const [data, setData] = useState<Omit<OnboardingData, "tdee">>({
         age: "",
         gender: "male",
         height: "",
