@@ -6,4 +6,4 @@ frontend/dist/
 *.db
 sessions.db
 .DS_Store
-
+public/

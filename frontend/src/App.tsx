@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
+import { Onboarding } from "./components/Onboarding";
 
 function App() {
     const [user, setUser] = useState<any>(null);
@@ -18,6 +19,37 @@ function App() {
             })
             .catch(() => setLoading(false));
     }, []);
+
+    const checkUser = async () => {
+        try {
+            const res = await fetch("/api/me");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.loggedIn) setUser(data.user);
+                else setUser(null);
+            } else {
+                setUser(null);
+            }
+        } catch {
+            setUser(null);
+        }
+        setLoading(false);
+    };
+
+    const handleOnboardingComplete = async (data: any) => {
+        try {
+            const res = await fetch("/api/user/onboarding", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) throw new Error("Failed to save profile");
+            checkUser(); // Refresh user data to get tdee
+        } catch (e) {
+            console.error(e);
+            alert("Error saving profile. Please try again.");
+        }
+    };
 
     return (
         <ThemeProvider defaultTheme="system" storageKey="app-ui-theme">
@@ -48,11 +80,15 @@ function App() {
                     </div>
                 </div>
             ) : user ? (
-                <Dashboard user={user} onLogout={() => setUser(null)} />
+                !user.tdee ? (
+                    <Onboarding onComplete={handleOnboardingComplete} />
+                ) : (
+                    <Dashboard user={user} onLogout={() => setUser(null)} />
+                )
             ) : (
                 <Auth onLogin={() => window.location.reload()} />
             )}
-            <Toaster />
+            <Toaster position="top-center" />
         </ThemeProvider>
     );
 }

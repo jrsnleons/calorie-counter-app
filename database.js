@@ -1,59 +1,85 @@
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
+const { Pool } = require("pg");
+require("dotenv").config();
 
-const dbPath = path.resolve(__dirname, "app.db");
-const db = new sqlite3.Database(dbPath);
-
-db.serialize(() => {
-    // Users Table
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        name TEXT,
-        avatar TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Attempt to add new columns if table already exists (schema migration)
-    db.run("ALTER TABLE users ADD COLUMN name TEXT", (err) => {});
-    db.run("ALTER TABLE users ADD COLUMN avatar TEXT", (err) => {});
-
-    // Meals Table - NEW COLUMN: 'items' (TEXT)
-    db.run(`CREATE TABLE IF NOT EXISTS meals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        food_name TEXT,
-        calories INTEGER,
-        protein TEXT,
-        carbs TEXT,
-        fat TEXT,
-        items TEXT,
-        date TEXT,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )`);
+// Use connection string from environment or default to local (for testing compatibility)
+// On Neon/Render, DATABASE_URL will be provided.
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
 });
 
+const initializeDB = async () => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE,
+                password TEXT,
+                name TEXT,
+                avatar TEXT,
+                height INTEGER,
+                weight INTEGER,
+                age INTEGER,
+                gender TEXT,
+                activity_level TEXT,
+                goal TEXT,
+                tdee INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS meals (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                food_name TEXT,
+                calories INTEGER,
+                protein TEXT,
+                carbs TEXT,
+                fat TEXT,
+                items TEXT,
+                meal_type TEXT,
+                date TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS weight_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                weight REAL,
+                date TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Session table is handled by connect-pg-simple, but good to have explicit SQL just in case
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS session (
+                sid varchar NOT NULL COLLATE "default",
+                sess json NOT NULL,
+                expire timestamp(6) NOT NULL
+            )
+            WITH (OIDS=FALSE);
+        `);
+        // Add constraint separately to avoid error if it exists
+        try {
+             await pool.query(`ALTER TABLE session ADD CONSTRAINT session_pkey PRIMARY KEY (sid) NOT DEFERRABLE INITIALLY IMMEDIATE;`);
+        } catch (e) { /* ignore if exists */ }
+
+        await pool.query(`CREATE INDEX IF NOT EXISTS IDX_session_expire ON session ("expire");`);
+
+        console.log("Database initialized successfully");
+    } catch (err) {
+        console.error("Error initializing database:", err);
+    }
+};
+
+// Run init
+initializeDB();
+
 module.exports = {
-    all: (query, params) =>
-        new Promise((resolve, reject) => {
-            db.all(query, params, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        }),
-    get: (query, params) =>
-        new Promise((resolve, reject) => {
-            db.get(query, params, (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        }),
-    run: (query, params) =>
-        new Promise((resolve, reject) => {
-            db.run(query, params, function (err) {
-                if (err) reject(err);
-                else resolve({ id: this.lastID, changes: this.changes });
-            });
-        }),
+    pool,
+    query: (text, params) => pool.query(text, params),
 };

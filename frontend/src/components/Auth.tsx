@@ -11,7 +11,7 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
     const btnRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        let timer: NodeJS.Timeout;
+        let timer: any;
 
         async function initGoogle() {
             try {
