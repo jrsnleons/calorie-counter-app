@@ -10,8 +10,9 @@ const path = require("path");
 require("dotenv").config();
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
-// Setup Google Client
+
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 app.use(cors());
