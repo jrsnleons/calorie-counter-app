@@ -71,7 +71,7 @@ app.use(
 const apiKey = process.env.API_KEY || "";
 if (!apiKey) console.warn("API_KEY for Gemini is missing");
 const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 // --- AUTH ROUTES ---
 
@@ -210,45 +210,58 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
     try {
         const { food, image } = req.body;
 
+        // 1. Clean the Base64 image string (Remove "data:image/jpeg;base64," prefix)
+        let cleanImage = image;
+        if (image && typeof image === "string" && image.includes("base64,")) {
+            cleanImage = image.split("base64,")[1];
+        }
+
         const prompt = `
-        Analyze this. Return JSON:
+        Analyze this meal. Return a strict JSON object with no markdown formatting.
+        Structure:
         {
-            "short_title": "A concise 3-5 word name for this meal (e.g. 'Jollibee Burger Meal')",
-            "items": [{"name": "str", "calories": int, "protein": "str", "carbs": "str", "fat": "str"}],
+            "short_title": "A concise 3-5 word name for this meal",
+            "items": [{"name": "string", "calories": int, "protein": "str", "carbs": "str", "fat": "str"}],
             "total_calories": int,
             "total_protein": "str",
             "total_carbs": "str",
             "total_fat": "str",
-            "summary": "str"
+            "summary": "string"
         }`;
 
         const inputParts: any[] = [prompt];
         if (food) inputParts.push(food);
-        if (image)
+        if (cleanImage) {
             inputParts.push({
-                inlineData: { data: image, mimeType: "image/jpeg" },
+                inlineData: { data: cleanImage, mimeType: "image/jpeg" },
             });
+        }
 
         const result = await model.generateContent(inputParts);
-        const text = result.response
-            .text()
-            .replace(/```json|```/g, "")
-            .trim();
-        const data = JSON.parse(text);
+        const responseText = result.response.text();
+
+        // Robust JSON extraction
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found in response");
+        
+        const data = JSON.parse(jsonMatch[0]);
 
         const today = new Date().toISOString().split("T")[0];
-        const itemsJson = JSON.stringify(data.items);
+        const itemsJson = JSON.stringify(data.items || []);
         const mealType = req.body.meal_type || "Snack";
+
+        // Safely parse calories to integer
+        const calories = parseInt(String(data.total_calories || 0));
 
         await query(
             `INSERT INTO meals (user_id, food_name, calories, protein, carbs, fat, items, date, meal_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
                 req.session.userId,
                 data.short_title || "Scanned Meal",
-                data.total_calories,
-                data.total_protein,
-                data.total_carbs,
-                data.total_fat,
+                calories,
+                String(data.total_protein || "0g"),
+                String(data.total_carbs || "0g"),
+                String(data.total_fat || "0g"),
                 itemsJson,
                 today,
                 mealType,
@@ -258,8 +271,8 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         data.meal_type = mealType;
         res.json(data);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "AI Error" });
+        console.error("AI Analysis Error:", error);
+        res.status(500).json({ error: "Failed to analyze meal" });
     }
 });
 
