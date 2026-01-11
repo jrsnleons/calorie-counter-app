@@ -42,6 +42,7 @@ import {
     Type,
     Upload,
     X,
+    AlertTriangle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -326,6 +327,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
+                    className="h-full"
                 >
                     <Settings
                         user={user}
@@ -340,156 +342,245 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3 }}
-                    className={`max-w-2xl mx-auto p-4 space-y-8 pb-20 ${
+                    className={`h-screen flex flex-col md:flex-col max-w-7xl mx-auto ${
                         shake ? "animate-shake" : ""
                     }`}
                 >
-                    <div className="flex justify-between items-center bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl p-4 rounded-3xl shadow-lg border border-white/20 dark:border-white/10 sticky top-4 z-50 transition-all duration-300">
-                        <div className="flex items-center gap-3">
+                    {/* Desktop Topbar / Mobile Navbar Logic */}
+                    <div className="order-last md:order-first md:w-full md:border-b md:border-gray-100 md:dark:border-gray-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl md:bg-white/50 md:backdrop-blur-md p-2 md:px-8 md:py-3 flex md:flex-row justify-around md:justify-start items-center fixed md:relative bottom-0 left-0 right-0 z-50 md:z-50 gap-4">
+                        {/* Logo for Desktop */}
+                        <div className="hidden md:flex items-center gap-3 mr-8">
                             <img
                                 src="/logo.svg"
                                 alt="Pakals Logo"
-                                className="w-10 h-10 shadow-md rounded-xl"
+                                className="w-8 h-8 rounded-lg shadow-sm"
                             />
-                            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-fuchsia-500 bg-clip-text text-transparent">
+                            <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 bg-clip-text text-transparent">
                                 Pakals
-                            </h1>
+                            </span>
                         </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    className="relative h-10 w-10 rounded-full"
-                                >
-                                    <Avatar className="h-10 w-10">
-                                        <AvatarImage
-                                            src={user.avatar}
-                                            alt={user.name}
-                                        />
-                                        <AvatarFallback>
-                                            {user.name?.charAt(0) || "U"}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                className="w-56"
-                                align="end"
-                                forceMount
+                        {/* Navigation Items */}
+                        <div className="contents md:flex md:items-center md:gap-2">
+                            <button
+                                onClick={() => setActiveTab("home")}
+                                className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
+                                    activeTab === "home"
+                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
+                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                }`}
                             >
-                                <DropdownMenuLabel className="font-normal">
-                                    <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">
-                                            {user.name}
-                                        </p>
-                                        <p className="text-xs leading-none text-muted-foreground">
-                                            {user.username}
-                                        </p>
-                                    </div>
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    onClick={() => setView("settings")}
+                                <Home className="w-6 h-6 md:w-4 md:h-4" />
+                                <span className="text-[10px] md:text-sm font-medium md:flex">
+                                    Home
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("history")}
+                                className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
+                                    activeTab === "history"
+                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
+                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                }`}
+                            >
+                                <Calendar className="w-6 h-6 md:w-4 md:h-4" />
+                                <span className="text-[10px] md:text-sm font-medium md:flex">
+                                    History
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("weight")}
+                                className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
+                                    activeTab === "weight"
+                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
+                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                }`}
+                            >
+                                <Scale className="w-6 h-6 md:w-4 md:h-4" />
+                                <span className="text-[10px] md:text-sm font-medium md:flex">
+                                    Weight
+                                </span>
+                            </button>
+                        </div>
+
+                        {/* Desktop User Menu at Right */}
+                        <div className="hidden md:flex ml-auto border-l border-gray-100 dark:border-gray-800 pl-4">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="text-zinc-600 flex items-center gap-2 h-auto py-1.5 px-2 hover:bg-gray-50"
+                                    >
+                                        <Avatar className="h-7 w-7">
+                                            <AvatarImage
+                                                src={user.avatar}
+                                                alt={user.name}
+                                            />
+                                            <AvatarFallback>
+                                                {user.name?.charAt(0) || "U"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col items-start truncate">
+                                            <span className="text-sm font-medium">
+                                                {user.name}
+                                            </span>
+                                        </div>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    className="w-56"
+                                    align="end"
+                                    forceMount
                                 >
-                                    <SettingsIcon className="mr-2 h-4 w-4" />
-                                    <span>Settings</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    onClick={handleLogout}
-                                    className="text-red-600 focus:text-red-600"
-                                >
-                                    <LogOut className="mr-2 h-4 w-4" />
-                                    <span>Log out</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    <DropdownMenuItem
+                                        onClick={() => setView("settings")}
+                                    >
+                                        <SettingsIcon className="mr-2 h-4 w-4" />
+                                        <span>Settings</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={handleLogout}
+                                        className="text-red-600 focus:text-red-600"
+                                    >
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        <span>Log out</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-y-auto h-full p-4 md:p-8 space-y-8 pb-24 md:pb-8 flex flex-col md:max-w-3xl md:mx-auto w-full">
+                        {/* Mobile Header (Hidden on Desktop) */}
+                        <div className="flex md:hidden justify-between items-center bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl p-4 rounded-3xl shadow-lg border border-white/20 dark:border-white/10 sticky top-4 z-50 transition-all duration-300">
+                            <div className="flex items-center gap-3">
+                                <img
+                                    src="/logo.svg"
+                                    alt="Pakals Logo"
+                                    className="w-10 h-10 shadow-md rounded-xl"
+                                />
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-fuchsia-500 bg-clip-text text-transparent">
+                                    Pakals
+                                </h1>
+                            </div>
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="relative h-10 w-10 rounded-full"
+                                    >
+                                        <Avatar className="h-10 w-10">
+                                            <AvatarImage
+                                                src={user.avatar}
+                                                alt={user.name}
+                                            />
+                                            <AvatarFallback>
+                                                {user.name?.charAt(0) || "U"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    className="w-56"
+                                    align="end"
+                                    forceMount
+                                >
+                                    <DropdownMenuLabel className="font-normal">
+                                        <div className="flex flex-col space-y-1">
+                                            <p className="text-sm font-medium leading-none">
+                                                {user.name}
+                                            </p>
+                                            <p className="text-xs leading-none text-muted-foreground">
+                                                {user.username}
+                                            </p>
+                                        </div>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={() => setView("settings")}
+                                    >
+                                        <SettingsIcon className="mr-2 h-4 w-4" />
+                                        <span>Settings</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={handleLogout}
+                                        className="text-red-600 focus:text-red-600"
+                                    >
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        <span>Log out</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+
 
                     {activeTab === "home" && (
                         <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Dashboard Hero: Progress Ring */}
-                            <Card className="rounded-[2rem] border-none shadow-xl bg-gradient-to-br from-purple-600 to-fuchsia-700 text-white overflow-hidden relative">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl"></div>
+                            {/* Dashboard Hero: Standard Progress Card */}
+                            <Card className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
+                                remaining < 0 
+                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50" 
+                                    : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
+                                } text-white p-6 group`}>
+                                
+                                {/* Ambient Background Effect */}
+                                <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
+                                <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
 
-                                <CardContent className="p-8 flex flex-col items-center justify-center relative z-10">
-                                    <div className="relative w-48 h-48 flex items-center justify-center">
-                                        <svg className="w-full h-full transform -rotate-90">
-                                            <circle
-                                                cx="96"
-                                                cy="96"
-                                                r="88"
-                                                stroke="currentColor"
-                                                strokeWidth="12"
-                                                fill="transparent"
-                                                className="text-white/20"
-                                            />
-                                            <circle
-                                                cx="96"
-                                                cy="96"
-                                                r="88"
-                                                stroke="currentColor"
-                                                strokeWidth="12"
-                                                fill="transparent"
-                                                strokeDasharray={
-                                                    2 * Math.PI * 88
-                                                }
-                                                strokeDashoffset={
-                                                    2 *
-                                                    Math.PI *
-                                                    88 *
-                                                    (1 - progress / 100)
-                                                }
-                                                strokeLinecap="round"
-                                                className={`${
-                                                    remaining < 0
-                                                        ? "text-red-400"
-                                                        : "text-white"
-                                                } transition-all duration-1000 ease-out`}
-                                            />
-                                        </svg>
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                            <span className="text-5xl font-bold tracking-tighter">
-                                                {todayCalories}
-                                            </span>
-                                            <span className="text-sm font-medium opacity-80 uppercase tracking-widest mt-1">
-                                                Eaten
-                                            </span>
+                                <div className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${remaining < 0 ? "text-yellow-300 opacity-20" : ""}`}>
+                                    {remaining < 0 ? <AlertTriangle className="w-32 h-32 animate-bounce" /> : <Scale className="w-32 h-32" />}
+                                </div>
+                                
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
+                                    <div className="space-y-1">
+                                         <div className="text-sm font-bold uppercase tracking-widest text-white/80">
+                                            {remaining < 0 ? "Daily Limit Exceeded" : "Calories Eaten"}
+                                        </div>
+                                        <div className="text-7xl font-black tracking-tighter drop-shadow-md">
+                                            {todayCalories}
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-8 mt-6 w-full text-center">
-                                        <div>
-                                            <div className="text-xs opacity-70 uppercase tracking-wider">
+
+                                    {/* Progress Bar */}
+                                    <div className="w-full space-y-2">
+                                        <div className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${remaining < 0 ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "border-white/10"}`}>
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
+                                                    remaining < 0 
+                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full" 
+                                                        : "bg-white"
+                                                }`}
+                                                style={{ width: remaining < 0 ? '100%' : `${Math.min(progress, 100)}%` }}
+                                            >
+                                                {remaining < 0 && <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest animate-pulse">Overload</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-8 w-full mt-4">
+                                        <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
                                                 Goal
                                             </div>
-                                            <div className="text-xl font-bold">
+                                            <div className="text-2xl font-bold">
                                                 {tdee}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div
-                                                className={`text-xs opacity-70 uppercase tracking-wider ${
-                                                    remaining < 0
-                                                        ? "text-red-200"
-                                                        : ""
-                                                }`}
-                                            >
-                                                {remaining < 0
-                                                    ? "Over Limit"
-                                                    : "Remaining"}
+                                        <div className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
+                                            remaining < 0 
+                                                ? "bg-red-950/30 border-red-200/50 animate-pulse" 
+                                                : "bg-white/10 border-white/10"
+                                        }`}>
+                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
+                                                {remaining < 0 ? "Over Limit" : "Remaining"}
                                             </div>
-                                            <div
-                                                className={`text-xl font-bold ${
-                                                    remaining < 0
-                                                        ? "text-red-200"
-                                                        : ""
-                                                }`}
-                                            >
-                                                {remaining < 0
-                                                    ? `+${Math.abs(remaining)}`
-                                                    : remaining}
+                                            <div className="text-2xl font-bold">
+                                                {remaining < 0 ? `+${Math.abs(remaining)}` : remaining}
                                             </div>
                                         </div>
                                     </div>
@@ -669,6 +760,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
                                                 {result.total_calories} kcal
                                             </div>
+                                            
                                             <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
                                                 {result.summary}
                                             </p>
@@ -1037,48 +1129,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         </div>
                     )}
 
-                    <div className="h-24" />
 
-                    <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 p-2 pb-6 md:pb-2 flex justify-around items-center z-50">
-                        <button
-                            onClick={() => setActiveTab("home")}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-20 ${
-                                activeTab === "home"
-                                    ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                                    : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
-                            }`}
-                        >
-                            <Home className="w-6 h-6" />
-                            <span className="text-[10px] font-medium">
-                                Home
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("history")}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-20 ${
-                                activeTab === "history"
-                                    ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                                    : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
-                            }`}
-                        >
-                            <Calendar className="w-6 h-6" />
-                            <span className="text-[10px] font-medium">
-                                History
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("weight")}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-20 ${
-                                activeTab === "weight"
-                                    ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                                    : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
-                            }`}
-                        >
-                            <Scale className="w-6 h-6" />
-                            <span className="text-[10px] font-medium">
-                                Weight
-                            </span>
-                        </button>
                     </div>
                 </motion.div>
             )}
