@@ -15,6 +15,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
+import { apiQueue } from "@/lib/api-queue";
 
 interface SettingsProps {
     user: User;
@@ -38,26 +39,28 @@ export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
     const handleSave = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/user", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ...formData,
-                    age: Number(formData.age),
-                    height: Number(formData.height),
-                    weight: Number(formData.weight),
-                }),
-            });
+            await apiQueue.add(async () => {
+                const res = await fetch("/api/user", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        ...formData,
+                        age: Number(formData.age),
+                        height: Number(formData.height),
+                        weight: Number(formData.weight),
+                    }),
+                });
 
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(
-                    `Profile updated! New Daily Goal: ${data.tdee} kcal`
-                );
-                onUpdateUser(); // Refresh parent state without reload
-            } else {
-                toast.error("Failed to update profile");
-            }
+                if (res.ok) {
+                    const data = await res.json();
+                    toast.success(
+                        `Profile updated! New Daily Goal: ${data.tdee} kcal`
+                    );
+                    onUpdateUser(); // Refresh parent state without reload
+                } else {
+                    toast.error("Failed to update profile");
+                }
+            });
         } catch (error) {
             toast.error("Something went wrong");
         } finally {

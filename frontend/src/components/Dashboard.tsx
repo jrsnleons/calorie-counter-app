@@ -46,6 +46,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Settings } from "./Settings";
+import { apiQueue } from "@/lib/api-queue";
 
 interface AnalysisResult {
     short_title: string;
@@ -170,20 +171,22 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     const handleAddWeight = async () => {
         if (!newWeight) return;
         try {
-            const today = new Date().toISOString().split("T")[0];
-            const res = await fetch("/api/weight", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    weight: parseFloat(newWeight),
-                    date: today,
-                }),
+            await apiQueue.add(async () => {
+                const today = new Date().toISOString().split("T")[0];
+                const res = await fetch("/api/weight", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        weight: parseFloat(newWeight),
+                        date: today,
+                    }),
+                });
+                if (res.ok) {
+                    setNewWeight("");
+                    loadWeightLogs();
+                    toast.success("Weight recorded!");
+                }
             });
-            if (res.ok) {
-                setNewWeight("");
-                loadWeightLogs();
-                toast.success("Weight recorded!");
-            }
         } catch (e) {
             toast.error("Failed to save weight");
         }
@@ -223,23 +226,25 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         setResult(null);
 
         try {
-            const res = await fetch("/api/analyze", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    food: textInput,
-                    image: mode === "photo" ? base64Image : undefined,
-                    meal_type: mealType, // Send meal type
-                }),
-            });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
+            await apiQueue.add(async () => {
+                const res = await fetch("/api/analyze", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        food: textInput,
+                        image: mode === "photo" ? base64Image : undefined,
+                        meal_type: mealType, // Send meal type
+                    }),
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
 
-            setResult(data);
-            setTextInput("");
-            setBase64Image("");
-            setPreview("");
-            loadHistory();
+                setResult(data);
+                setTextInput("");
+                setBase64Image("");
+                setPreview("");
+                loadHistory();
+            });
         } catch (e: any) {
             showError(e.message);
         } finally {
@@ -248,8 +253,10 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     };
 
     const deleteMeal = async (id: number) => {
-        await fetch(`/api/history/${id}`, { method: "DELETE" });
-        loadHistory();
+        await apiQueue.add(async () => {
+            await fetch(`/api/history/${id}`, { method: "DELETE" });
+            loadHistory();
+        });
     };
 
     const handleLogout = async () => {
@@ -291,18 +298,20 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         if (!editingMeal) return;
 
         try {
-            const res = await fetch(`/api/history/${editingMeal.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(editingMeal),
+            await apiQueue.add(async () => {
+                const res = await fetch(`/api/history/${editingMeal.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(editingMeal),
+                });
+                if (res.ok) {
+                    toast.success("Meal updated successfully");
+                    setEditingMeal(null);
+                    loadHistory();
+                } else {
+                    toast.error("Failed to update meal");
+                }
             });
-            if (res.ok) {
-                toast.success("Meal updated successfully");
-                setEditingMeal(null);
-                loadHistory();
-            } else {
-                toast.error("Failed to update meal");
-            }
         } catch (e) {
             toast.error("Error updating meal");
         }
