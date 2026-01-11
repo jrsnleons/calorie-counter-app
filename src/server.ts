@@ -7,7 +7,51 @@ import express, { Request, Response } from "express";
 import session from "express-session";
 import { OAuth2Client } from "google-auth-library";
 import path from "path";
-import { pool, query } from "./database"; // Updated import
+import { pool, query } from "./database";
+
+class RequestQueue {
+    private queue: (() => Promise<void>)[] = [];
+    private activeCount = 0;
+    private readonly concurrency: number;
+
+    constructor(concurrency: number) {
+        this.concurrency = concurrency;
+    }
+
+    async add<T>(task: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const wrapper = async () => {
+                try {
+                    const result = await task();
+                    resolve(result);
+                } catch (err) {
+                    reject(err);
+                } finally {
+                    this.activeCount--;
+                    this.next();
+                }
+            };
+
+            if (this.activeCount < this.concurrency) {
+                this.activeCount++;
+                wrapper();
+            } else {
+                this.queue.push(wrapper);
+            }
+        });
+    }
+
+    private next() {
+        if (this.activeCount < this.concurrency && this.queue.length > 0) {
+            this.activeCount++;
+            const task = this.queue.shift();
+            task?.();
+        }
+    }
+}
+
+// Global queue for AI operations (limit to 5 concurrent reqs)
+const aiQueue = new RequestQueue(5);
 
 dotenv.config();
 
@@ -242,7 +286,8 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             });
         }
 
-        const result = await model.generateContent(inputParts);
+        // Add to queue for processing
+        const result = await aiQueue.add(() => model.generateContent(inputParts));
         const responseText = result.response.text();
 
         // Robust JSON extraction
