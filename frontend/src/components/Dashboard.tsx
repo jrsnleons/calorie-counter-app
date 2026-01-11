@@ -94,6 +94,15 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         return date1 === date2;
     }
 
+    const getSafeItems = (items: any) => {
+        try {
+            const parsed = typeof items === "string" ? JSON.parse(items) : items;
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
     const todayCalories = history.reduce(
         (acc, curr) =>
             isSameDate(curr.date, currentDate)
@@ -842,12 +851,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                             {/* Breakdown in Daily Log */}
                                                             {meal.items && (
                                                                 <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
-                                                                    {(typeof meal.items ===
-                                                                    "string"
-                                                                        ? JSON.parse(
-                                                                              meal.items
-                                                                          )
-                                                                        : meal.items
+                                                                    {getSafeItems(
+                                                                        meal.items
                                                                     ).map(
                                                                         (
                                                                             it: any,
