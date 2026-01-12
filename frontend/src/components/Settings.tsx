@@ -9,13 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
+import { apiQueue } from "@/lib/api-queue";
 import type { User } from "@/types";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
-import { apiQueue } from "@/lib/api-queue";
 
 interface SettingsProps {
     user: User;

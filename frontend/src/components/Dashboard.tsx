@@ -1,14 +1,3 @@
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +70,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     );
     const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
     const [newWeight, setNewWeight] = useState("");
+    const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+    const [historySearch, setHistorySearch] = useState("");
 
     const [shake, setShake] = useState(false);
     const [mealType, setMealType] = useState<
@@ -218,6 +209,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     };
 
     const handleAnalyze = async () => {
+        if (analyzing) return; // Prevent double-click
+
         if (mode === "text" && !textInput.trim())
             return showError("Please enter some text description!");
         if (mode === "photo" && !base64Image)
@@ -225,6 +218,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
         setAnalyzing(true);
         setResult(null);
+        toast.loading("Analyzing your meal...", { id: "analyze" });
 
         try {
             await apiQueue.add(async () => {
@@ -245,19 +239,29 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                 setBase64Image("");
                 setPreview("");
                 loadHistory();
+                toast.success("Meal tracked successfully!", { id: "analyze" });
             });
         } catch (e: any) {
             showError(e.message);
+            toast.dismiss("analyze");
         } finally {
             setAnalyzing(false);
         }
     };
 
     const deleteMeal = async (id: number) => {
+        if (deleteConfirm !== id) {
+            setDeleteConfirm(id);
+            setTimeout(() => setDeleteConfirm(null), 3000);
+            return;
+        }
+
         await apiQueue.add(async () => {
             await fetch(`/api/history/${id}`, { method: "DELETE" });
             loadHistory();
+            toast.success("Meal deleted");
         });
+        setDeleteConfirm(null);
     };
 
     const handleLogout = async () => {
@@ -284,7 +288,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     const updateEditItems = (newItems: { name: string; calories: number }[]) => {
         setEditItems(newItems);
         const newTotal = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
-        
+
         if (editingMeal) {
             setEditingMeal({
                 ...editingMeal,
@@ -296,6 +300,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
     const handleUpdateMeal = async (e?: React.MouseEvent) => {
         e?.preventDefault();
+        e?.stopPropagation();
         if (!editingMeal) return;
 
         try {
@@ -366,8 +371,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("home")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "home"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Home className="w-6 h-6 md:w-4 md:h-4" />
@@ -379,8 +384,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("history")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "history"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Calendar className="w-6 h-6 md:w-4 md:h-4" />
@@ -392,8 +397,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("weight")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "weight"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Scale className="w-6 h-6 md:w-4 md:h-4" />
@@ -452,7 +457,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                     </div>
 
                     {/* Main Content Area */}
-                    <div className="flex-1 overflow-y-auto h-full p-4 md:p-8 space-y-8 pb-24 md:pb-8 flex flex-col md:max-w-3xl md:mx-auto w-full">
+                    <div className="flex-1 overflow-y-auto h-full p-4 md:p-8 space-y-8 pb-28 md:pb-8 flex flex-col md:max-w-3xl md:mx-auto w-full">
                         {/* Mobile Header (Hidden on Desktop) */}
                         <div className="flex md:hidden justify-between items-center bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl p-4 rounded-3xl shadow-lg border border-white/20 dark:border-white/10 sticky top-4 z-50 transition-all duration-300">
                             <div className="flex items-center gap-3">
@@ -522,11 +527,11 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {/* Dashboard Hero: Standard Progress Card */}
                             <Card className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
-                                remaining < 0 
-                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50" 
+                                remaining < 0
+                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50"
                                     : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
                                 } text-white p-6 group`}>
-                                
+
                                 {/* Ambient Background Effect */}
                                 <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
                                 <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
@@ -535,7 +540,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 <div className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${remaining < 0 ? "text-yellow-300 opacity-20" : ""}`}>
                                     {remaining < 0 ? <AlertTriangle className="w-32 h-32 animate-bounce" /> : <Scale className="w-32 h-32" />}
                                 </div>
-                                
+
                                 <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
                                     <div className="space-y-1">
                                          <div className="text-sm font-bold uppercase tracking-widest text-white/80">
@@ -549,10 +554,10 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     {/* Progress Bar */}
                                     <div className="w-full space-y-2">
                                         <div className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${remaining < 0 ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "border-white/10"}`}>
-                                            <div 
+                                            <div
                                                 className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
-                                                    remaining < 0 
-                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full" 
+                                                    remaining < 0
+                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full"
                                                         : "bg-white"
                                                 }`}
                                                 style={{ width: remaining < 0 ? '100%' : `${Math.min(progress, 100)}%` }}
@@ -572,8 +577,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             </div>
                                         </div>
                                         <div className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
-                                            remaining < 0 
-                                                ? "bg-red-950/30 border-red-200/50 animate-pulse" 
+                                            remaining < 0
+                                                ? "bg-red-950/30 border-red-200/50 animate-pulse"
                                                 : "bg-white/10 border-white/10"
                                         }`}>
                                             <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
@@ -760,8 +765,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
                                                 {result.total_calories} kcal
                                             </div>
-                                            
-                                            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
+
+                                            <p className="text-muted-foreground leading-relaxed text-sm">
                                                 {result.summary}
                                             </p>
 
@@ -854,7 +859,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 ).map(([mType, meals]) => (
                                     <div key={mType} className="space-y-2">
                                         <div className="flex justify-between items-center px-1">
-                                            <h3 className="font-semibold text-gray-500 uppercase tracking-wide text-xs">
+                                            <h3 className="font-semibold text-muted-foreground uppercase tracking-wide text-xs">
                                                 {mType}
                                             </h3>
                                             <span className="text-xs font-bold">
@@ -866,20 +871,25 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             </span>
                                         </div>
                                         {meals.length === 0 ? (
-                                            <div className="p-4 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl text-center text-xs text-gray-400">
-                                                No {mType} logged
+                                            <div className="p-6 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl text-center">
+                                                <div className="text-3xl mb-2">
+                                                    {mType === "Breakfast" ? "🌅" :
+                                                     mType === "Lunch" ? "☀️" :
+                                                     mType === "Dinner" ? "🌙" : "🍿"}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">No {mType.toLowerCase()} logged yet</p>
                                             </div>
                                         ) : (
                                             meals.map((meal) => (
                                                 <Card
                                                     key={meal.id}
-                                                    className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-white dark:bg-zinc-900/50 shadow-sm"
+                                                    className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-card shadow-sm"
                                                 >
                                                     <div className="absolute bottom-2 right-2 flex gap-1">
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                                                             onClick={() =>
                                                                 setEditingMeal(
                                                                     meal
@@ -888,60 +898,23 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                         >
                                                             <Pencil className="w-4 h-4" />
                                                         </Button>
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger
-                                                                asChild
-                                                            >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>
-                                                                        Delete
-                                                                        Meal
-                                                                        Entry?
-                                                                    </AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        This
-                                                                        will
-                                                                        permanently
-                                                                        delete "
-                                                                        {
-                                                                            meal.food_name
-                                                                        }
-                                                                        " from
-                                                                        your
-                                                                        history.
-                                                                        This
-                                                                        action
-                                                                        cannot
-                                                                        be
-                                                                        undone.
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>
-                                                                        Cancel
-                                                                    </AlertDialogCancel>
-                                                                    <AlertDialogAction
-                                                                        onClick={() =>
-                                                                            deleteMeal(
-                                                                                meal.id
-                                                                            )
-                                                                        }
-                                                                        className="bg-red-500 hover:bg-red-600 text-white"
-                                                                    >
-                                                                        Delete
-                                                                    </AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => deleteMeal(meal.id)}
+                                                            className={`h-8 w-8 transition-colors ${
+                                                                deleteConfirm === meal.id
+                                                                    ? "bg-red-500 text-white animate-pulse hover:bg-red-600"
+                                                                    : "text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                                                            }`}
+                                                            title={deleteConfirm === meal.id ? "Click again to confirm" : "Delete meal"}
+                                                        >
+                                                            {deleteConfirm === meal.id ? (
+                                                                <AlertTriangle className="w-4 h-4" />
+                                                            ) : (
+                                                                <Trash2 className="w-4 h-4" />
+                                                            )}
+                                                        </Button>
                                                     </div>
 
                                                     <CardContent className="p-4 flex justify-between items-start">
@@ -951,7 +924,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                             </h4>
                                                             {/* Breakdown in Daily Log */}
                                                             {meal.items && (
-                                                                <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                                                                     {getSafeItems(
                                                                         meal.items
                                                                     ).map(
@@ -1014,20 +987,48 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
                     {activeTab === "history" && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <h2 className="text-2xl font-bold">History</h2>
+                            <div className="flex items-center justify-between gap-4">
+                                <h2 className="text-2xl font-bold">History</h2>
+                                <div className="flex-1 max-w-sm">
+                                    <Input
+                                        placeholder="Search meals..."
+                                        value={historySearch}
+                                        onChange={(e) => setHistorySearch(e.target.value)}
+                                        className="h-10"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Empty State for History */}
+                            {history.length === 0 ? (
+                                <div className="text-center py-16 space-y-4">
+                                    <div className="text-6xl">📊</div>
+                                    <h3 className="text-xl font-semibold">No meals logged yet</h3>
+                                    <p className="text-muted-foreground">
+                                        Start tracking your meals to see your history here!
+                                    </p>
+                                </div>
+                            ) : (
+                            <div className="space-y-6">
                             {/* Full History Grouped by Date */}
                             {Object.entries(
-                                history.reduce((acc, meal) => {
-                                    (acc[meal.date] =
-                                        acc[meal.date] || []).push(meal);
-                                    return acc;
-                                }, {} as Record<string, Meal[]>)
+                                history
+                                    .filter(meal =>
+                                        historySearch === "" ||
+                                        meal.food_name.toLowerCase().includes(historySearch.toLowerCase()) ||
+                                        meal.meal_type?.toLowerCase().includes(historySearch.toLowerCase())
+                                    )
+                                    .reduce((acc, meal) => {
+                                        (acc[meal.date] =
+                                            acc[meal.date] || []).push(meal);
+                                        return acc;
+                                    }, {} as Record<string, Meal[]>)
                             )
                                 .sort((a, b) => b[0].localeCompare(a[0]))
                                 .map(([date, meals]) => (
                                     <Card
                                         key={date}
-                                        className="p-4 border-none shadow-sm bg-white dark:bg-zinc-900/50"
+                                        className="p-4 border-none shadow-sm bg-card"
                                     >
                                         <h3 className="font-bold text-gray-500 mb-4">
                                             {new Date(date).toDateString()}
@@ -1066,6 +1067,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                         </div>
                                     </Card>
                                 ))}
+                            </div>
+                            )}
                         </div>
                     )}
 
@@ -1074,7 +1077,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                             <h2 className="text-2xl font-bold">
                                 Weight Tracker
                             </h2>
-                            <Card className="p-6 border-none shadow-sm bg-white dark:bg-zinc-900/50">
+                            <Card className="p-6 border-none shadow-sm bg-card">
                                 <h3 className="font-medium mb-4">Log Weight</h3>
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
@@ -1087,13 +1090,13 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             }
                                             className="pr-12"
                                         />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                                             kg
                                         </span>
                                     </div>
                                     <Button
                                         onClick={handleAddWeight}
-                                        className="bg-purple-600 hover:bg-purple-700"
+                                        className="bg-primary hover:opacity-90"
                                     >
                                         Log
                                     </Button>
@@ -1101,25 +1104,28 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                             </Card>
 
                             <div className="space-y-3">
-                                <h3 className="font-medium text-gray-500">
+                                <h3 className="font-medium text-muted-foreground">
                                     History
                                 </h3>
                                 {weightLogs.length === 0 ? (
-                                    <div className="text-center p-8 text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
-                                        No weight logs yet
+                                    <div className="text-center py-12 space-y-3">
+                                        <div className="text-5xl">⚖️</div>
+                                        <p className="text-muted-foreground">
+                                            Start tracking your weight to see progress over time!
+                                        </p>
                                     </div>
                                 ) : (
                                     weightLogs.map((log) => (
                                         <div
                                             key={log.id}
-                                            className="flex justify-between items-center p-4 bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-gray-800"
+                                            className="flex justify-between items-center p-4 bg-card rounded-xl border"
                                         >
                                             <span className="font-medium">
                                                 {new Date(
                                                     log.date
                                                 ).toLocaleDateString()}
                                             </span>
-                                            <span className="font-bold text-purple-600">
+                                            <span className="font-bold text-primary">
                                                 {log.weight} kg
                                             </span>
                                         </div>
@@ -1136,19 +1142,31 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
             {/* Edit Meal Modal */}
             {editingMeal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div 
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            e.preventDefault();
+                            setEditingMeal(null);
+                        }
+                    }}
+                >
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-xl border border-gray-100 dark:border-zinc-800"
+                        className="bg-card rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-xl border"
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-lg">Edit Meal</h3>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setEditingMeal(null)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setEditingMeal(null);
+                                }}
                             >
                                 <X className="w-5 h-5" />
                             </Button>
@@ -1358,7 +1376,10 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                         variant="outline"
                                         className="w-full"
                                         type="button"
-                                        onClick={() => setEditingMeal(null)}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setEditingMeal(null);
+                                        }}
                                     >
                                         Cancel
                                     </Button>

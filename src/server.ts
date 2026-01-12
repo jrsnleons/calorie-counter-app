@@ -21,7 +21,11 @@ class RequestQueue {
     async add<T>(task: () => Promise<T>): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             const wrapper = async () => {
-                console.log(`[Queue] Starting task. Active: ${this.activeCount + 1}/${this.concurrency}`);
+                console.log(
+                    `[Queue] Starting task. Active: ${this.activeCount + 1}/${
+                        this.concurrency
+                    }`
+                );
                 try {
                     const result = await task();
                     console.log(`[Queue] Task completed successfully.`);
@@ -39,7 +43,11 @@ class RequestQueue {
                 this.activeCount++;
                 wrapper();
             } else {
-                console.log(`[Queue] Concurrency limit reached. Task queued. Pending: ${this.queue.length + 1}`);
+                console.log(
+                    `[Queue] Concurrency limit reached. Task queued. Pending: ${
+                        this.queue.length + 1
+                    }`
+                );
                 this.queue.push(wrapper);
             }
         });
@@ -256,7 +264,9 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         return res.status(401).json({ error: "Unauthorized" });
 
     try {
-        console.log(`[Analyze] Request received from User ${req.session.userId}`);
+        console.log(
+            `[Analyze] Request received from User ${req.session.userId}`
+        );
         const { food, image } = req.body;
 
         // 1. Clean the Base64 image string (Remove "data:image/jpeg;base64," prefix)
@@ -265,7 +275,9 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             cleanImage = image.split("base64,")[1];
         }
 
-        console.log(`[Analyze] Input processed. Has text: ${!!food}, Has image: ${!!cleanImage}`);
+        console.log(
+            `[Analyze] Input processed. Has text: ${!!food}, Has image: ${!!cleanImage}`
+        );
 
         const prompt = `
         Analyze this input (image or text).
@@ -295,14 +307,21 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
 
         // Add to queue for processing
         console.log(`[Analyze] Adding request to AI Queue...`);
-        const result = await aiQueue.add(() => model.generateContent(inputParts));
+        const result = await aiQueue.add(() =>
+            model.generateContent(inputParts)
+        );
         console.log(`[Analyze] AI generation complete. Parsing response...`);
         const responseText = result.response.text();
 
         // Robust JSON extraction
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            console.error(`[Analyze] No JSON found in response: ${responseText.substring(0, 100)}...`);
+            console.error(
+                `[Analyze] No JSON found in response: ${responseText.substring(
+                    0,
+                    100
+                )}...`
+            );
             throw new Error("No JSON found in response");
         }
 
@@ -310,7 +329,9 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
 
         // Guardrail Check
         if (data.is_food === false) {
-            console.warn(`[Analyze] Guardrail triggered: Not food. Reason: ${data.funny_comment}`);
+            console.warn(
+                `[Analyze] Guardrail triggered: Not food. Reason: ${data.funny_comment}`
+            );
             return res.json({
                 error: data.funny_comment || "That doesn't look like food!",
                 is_food: false,
@@ -536,7 +557,7 @@ app.put(
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Serve index.html for all other routes (client-side routing)
-app.get("*", (req, res) => {
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 

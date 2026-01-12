@@ -91,8 +91,12 @@
 }
 
 @keyframes wave {
-    0% { transform: translateX(-50%) rotate(0deg); }
-    100% { transform: translateX(-50%) rotate(360deg); }
+    0% {
+        transform: translateX(-50%) rotate(0deg);
+    }
+    100% {
+        transform: translateX(-50%) rotate(360deg);
+    }
 }
 
 .liquid-wave {
@@ -101,8 +105,16 @@
 }
 
 @keyframes drip {
-    0% { top: 0; opacity: 1; transform: scaleX(1); }
-    100% { top: 200px; opacity: 0; transform: scaleX(0.5); }
+    0% {
+        top: 0;
+        opacity: 1;
+        transform: scaleX(1);
+    }
+    100% {
+        top: 200px;
+        opacity: 0;
+        transform: scaleX(0.5);
+    }
 }
 
 .animate-drip {
@@ -143,20 +155,20 @@
 
 .glass-tube {
     background: rgba(255, 255, 255, 0.05);
-    box-shadow: 
-        inset 10px 10px 20px rgba(0,0,0,0.1),
-        inset -10px -10px 20px rgba(255,255,255,0.05),
-        0 15px 35px rgba(0,0,0,0.2);
-    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: inset 10px 10px 20px rgba(0, 0, 0, 0.1),
+        inset -10px -10px 20px rgba(255, 255, 255, 0.05),
+        0 15px 35px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .dark .glass-tube {
     background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 @keyframes gradient-xy {
-    0%, 100% {
+    0%,
+    100% {
         background-position: 0% 50%;
     }
     50% {
@@ -170,8 +182,13 @@
 }
 
 @keyframes float-slow {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-20px) rotate(5deg); }
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-20px) rotate(5deg);
+    }
 }
 
 .animate-float-slow {
@@ -179,8 +196,13 @@
 }
 
 @keyframes float-medium {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-15px) rotate(-5deg); }
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-15px) rotate(-5deg);
+    }
 }
 
 .animate-float-medium {
@@ -188,19 +210,23 @@
 }
 
 @keyframes barberpole {
-    0% { background-position: 0 0; }
-    100% { background-position: 40px 40px; }
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 40px 40px;
+    }
 }
 
 .animate-barberpole {
     background-image: linear-gradient(
-        45deg, 
-        rgba(255, 255, 255, 0.15) 25%, 
-        transparent 25%, 
-        transparent 50%, 
-        rgba(255, 255, 255, 0.15) 50%, 
-        rgba(255, 255, 255, 0.15) 75%, 
-        transparent 75%, 
+        45deg,
+        rgba(255, 255, 255, 0.15) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.15) 75%,
+        transparent 75%,
         transparent
     );
     background-size: 40px 40px;
@@ -208,8 +234,13 @@
 }
 
 @keyframes pulse-fast {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.8; }
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
 }
 
 .animate-pulse-fast {
