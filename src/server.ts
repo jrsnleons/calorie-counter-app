@@ -88,10 +88,15 @@ const allowedOrigins = [
 app.use(
     cors({
         origin: (origin, callback) => {
-            // Allow requests with no origin (like mobile apps or curl)
-            if (!origin) return callback(null, true);
+            // Allow requests with no origin (like mobile apps or curl) but only in development
+            if (!origin && process.env.NODE_ENV !== "production") {
+                return callback(null, allowedOrigins[0]);
+            }
+            if (!origin) {
+                return callback(new Error("Origin required"));
+            }
             if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, "")))) {
-                callback(null, true);
+                callback(null, origin); // Return the specific origin, not true
             } else {
                 callback(new Error("Not allowed by CORS"));
             }
