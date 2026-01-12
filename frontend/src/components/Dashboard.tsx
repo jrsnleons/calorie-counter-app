@@ -24,9 +24,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { apiQueue } from "@/lib/api-queue";
 import type { Meal, User, WeightLog } from "@/types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+    AlertTriangle,
     Calendar,
     Camera,
     ChevronLeft,
@@ -42,12 +44,10 @@ import {
     Type,
     Upload,
     X,
-    AlertTriangle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Settings } from "./Settings";
-import { apiQueue } from "@/lib/api-queue";
 
 interface AnalysisResult {
     short_title: string;
@@ -284,7 +284,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     const updateEditItems = (newItems: { name: string; calories: number }[]) => {
         setEditItems(newItems);
         const newTotal = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
-        
+
         if (editingMeal) {
             setEditingMeal({
                 ...editingMeal,
@@ -522,11 +522,11 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {/* Dashboard Hero: Standard Progress Card */}
                             <Card className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
-                                remaining < 0 
-                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50" 
+                                remaining < 0
+                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50"
                                     : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
                                 } text-white p-6 group`}>
-                                
+
                                 {/* Ambient Background Effect */}
                                 <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
                                 <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
@@ -535,7 +535,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 <div className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${remaining < 0 ? "text-yellow-300 opacity-20" : ""}`}>
                                     {remaining < 0 ? <AlertTriangle className="w-32 h-32 animate-bounce" /> : <Scale className="w-32 h-32" />}
                                 </div>
-                                
+
                                 <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
                                     <div className="space-y-1">
                                          <div className="text-sm font-bold uppercase tracking-widest text-white/80">
@@ -549,10 +549,10 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     {/* Progress Bar */}
                                     <div className="w-full space-y-2">
                                         <div className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${remaining < 0 ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "border-white/10"}`}>
-                                            <div 
+                                            <div
                                                 className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
-                                                    remaining < 0 
-                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full" 
+                                                    remaining < 0
+                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full"
                                                         : "bg-white"
                                                 }`}
                                                 style={{ width: remaining < 0 ? '100%' : `${Math.min(progress, 100)}%` }}
@@ -572,8 +572,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             </div>
                                         </div>
                                         <div className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
-                                            remaining < 0 
-                                                ? "bg-red-950/30 border-red-200/50 animate-pulse" 
+                                            remaining < 0
+                                                ? "bg-red-950/30 border-red-200/50 animate-pulse"
                                                 : "bg-white/10 border-white/10"
                                         }`}>
                                             <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
@@ -760,7 +760,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
                                                 {result.total_calories} kcal
                                             </div>
-                                            
+
                                             <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
                                                 {result.summary}
                                             </p>

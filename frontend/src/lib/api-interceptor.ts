@@ -1,7 +1,16 @@
-// Global fetch interceptor to handle session expiry
+import { apiUrl } from "@/config";
+
+// Global fetch interceptor to handle session expiry and API URL
 const originalFetch = window.fetch;
 
 window.fetch = async (...args) => {
+    // Convert relative API URLs to absolute URLs
+    let url = args[0];
+    if (typeof url === "string" && url.startsWith("/api")) {
+        url = apiUrl(url);
+        args[0] = url;
+    }
+
     const response = await originalFetch(...args);
 
     // If session expired (401) and it's not the /api/me check itself, redirect to login
@@ -13,4 +22,4 @@ window.fetch = async (...args) => {
     return response;
 };
 
-export {};
+export { };

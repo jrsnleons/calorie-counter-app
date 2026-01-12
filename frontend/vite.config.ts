@@ -5,6 +5,11 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
+    define: {
+        'import.meta.env.VITE_API_URL': JSON.stringify(
+            process.env.VITE_API_URL || 'http://localhost:3000'
+        ),
+    },
     plugins: [
         react(),
         VitePWA({
