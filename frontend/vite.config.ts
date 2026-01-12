@@ -7,7 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
     define: {
         'import.meta.env.VITE_API_URL': JSON.stringify(
-            process.env.VITE_API_URL || 'http://localhost:3000'
+            process.env.VITE_API_URL 
         ),
     },
     plugins: [
