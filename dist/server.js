@@ -12,7 +12,48 @@ const express_1 = __importDefault(require("express"));
 const express_session_1 = __importDefault(require("express-session"));
 const google_auth_library_1 = require("google-auth-library");
 const path_1 = __importDefault(require("path"));
-const database_1 = require("./database"); // Updated import
+const database_1 = require("./database");
+class RequestQueue {
+    constructor(concurrency) {
+        this.queue = [];
+        this.activeCount = 0;
+        this.concurrency = concurrency;
+    }
+    async add(task) {
+        return new Promise((resolve, reject) => {
+            const wrapper = async () => {
+                try {
+                    const result = await task();
+                    resolve(result);
+                }
+                catch (err) {
+                    console.error(`[Queue] Task failed:`, err);
+                    reject(err);
+                }
+                finally {
+                    this.activeCount--;
+                    this.next();
+                }
+            };
+            if (this.activeCount < this.concurrency) {
+                this.activeCount++;
+                wrapper();
+            }
+            else {
+                this.queue.push(wrapper);
+            }
+        });
+    }
+    next() {
+        if (this.activeCount < this.concurrency && this.queue.length > 0) {
+            this.activeCount++;
+            const task = this.queue.shift();
+            task?.();
+        }
+    }
+}
+// Global queue for AI operations (limit to 5 concurrent reqs)
+const aiQueue = new RequestQueue(5);
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
@@ -161,7 +202,7 @@ app.post("/api/analyze", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     try {
         const { food, image } = req.body;
-        // 1. Clean the Base64 image string (Remove "data:image/jpeg;base64," prefix)
+        // Clean Base64 image string
         let cleanImage = image;
         if (image && typeof image === "string" && image.includes("base64,")) {
             cleanImage = image.split("base64,")[1];
@@ -191,15 +232,18 @@ app.post("/api/analyze", async (req, res) => {
                 inlineData: { data: cleanImage, mimeType: "image/jpeg" },
             });
         }
-        const result = await model.generateContent(inputParts);
+        const result = await aiQueue.add(() => model.generateContent(inputParts));
         const responseText = result.response.text();
         // Robust JSON extraction
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch)
+        if (!jsonMatch) {
+            console.error(`[Analyze] No JSON found in response: ${responseText.substring(0, 100)}...`);
             throw new Error("No JSON found in response");
+        }
         const data = JSON.parse(jsonMatch[0]);
         // Guardrail Check
         if (data.is_food === false) {
+            console.warn(`[Analyze] Guardrail triggered: Not food. Reason: ${data.funny_comment}`);
             return res.json({
                 error: data.funny_comment || "That doesn't look like food!",
                 is_food: false,
@@ -352,6 +396,73 @@ app.put("/api/user", async (req, res) => {
         res.status(500).json({ error: "Failed to update profile" });
     }
 });
+// AI-Powered Meal Update
+app.post("/api/update-meal-ai", async (req, res) => {
+    if (!req.session.userId)
+        return res.status(401).json({ error: "Unauthorized" });
+    const { mealId, currentMeal, editPrompt } = req.body;
+    if (!editPrompt || !mealId || !currentMeal) {
+        return res.status(400).json({ error: "Missing required fields" });
+    }
+    try {
+        const result = await aiQueue.add(async () => {
+            const genAI = new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+            const model = genAI.getGenerativeModel({
+                model: "gemini-1.5-flash",
+            });
+            const prompt = `You are a nutrition assistant. A user has a logged meal and wants to update it.
+
+Current meal:
+- Food name: ${currentMeal.food_name}
+- Calories: ${currentMeal.calories}
+- Protein: ${currentMeal.protein}
+- Carbs: ${currentMeal.carbs}
+- Fat: ${currentMeal.fat}
+- Items: ${currentMeal.items || "None"}
+
+User's edit request: "${editPrompt}"
+
+Based on the user's request, provide the updated meal information. If they're adding food, increase values. If they're removing or reducing, decrease values. Be reasonable with estimates.
+
+Respond ONLY with valid JSON in this exact format (no markdown, no backticks):
+{
+  "food_name": "updated name",
+  "calories": number,
+  "protein": "Xg",
+  "carbs": "Xg",
+  "fat": "Xg",
+  "items": [{"name": "item name", "calories": number}]
+}`;
+            const aiResponse = await model.generateContent(prompt);
+            const text = aiResponse.response.text().trim();
+            // Remove markdown code blocks if present
+            let cleanText = text;
+            if (text.startsWith("```")) {
+                cleanText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+            }
+            const parsed = JSON.parse(cleanText);
+            // Update the meal in database
+            await (0, database_1.query)(`UPDATE meals SET food_name=$1, calories=$2, protein=$3, carbs=$4, fat=$5, items=$6 WHERE id=$7 AND user_id=$8`, [
+                parsed.food_name,
+                parsed.calories,
+                parsed.protein,
+                parsed.carbs,
+                parsed.fat,
+                JSON.stringify(parsed.items || []),
+                mealId,
+                req.session.userId,
+            ]);
+            return { success: true, updated: parsed };
+        });
+        res.json(result);
+    }
+    catch (error) {
+        console.error("AI Update Error:", error);
+        res.status(500).json({
+            error: "Failed to update meal with AI. Please try again.",
+        });
+    }
+});
 // Update Meal
 app.put("/api/history/:id", async (req, res) => {
     if (!req.session.userId)
@@ -376,6 +487,12 @@ app.put("/api/history/:id", async (req, res) => {
         console.error("Update Error:", error);
         res.status(500).json({ error: "Could not update meal" });
     }
+});
+// Serve static files from the public directory
+app.use(express_1.default.static(path_1.default.join(__dirname, "../public")));
+// Serve index.html for all other routes (client-side routing)
+app.use((req, res) => {
+    res.sendFile(path_1.default.join(__dirname, "../public/index.html"));
 });
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);

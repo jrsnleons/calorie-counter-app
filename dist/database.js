@@ -9,6 +9,9 @@ const pg_1 = require("pg");
 dotenv_1.default.config();
 // Use connection string from environment or default to local (for testing compatibility)
 // On Neon/Render, DATABASE_URL will be provided.
+if (!process.env.DATABASE_URL) {
+    console.error("❌ DATABASE_URL is not defined! Defaulting to localhost behavior which may fail.");
+}
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_URL &&

@@ -6,7 +6,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "@/lib/api-interceptor";
 import type { User } from "@/types";
-import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
     Navigate,
