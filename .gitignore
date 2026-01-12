@@ -6,8 +6,6 @@ frontend/dist/
 frontend/dev-dist/
 frontend/.env
 frontend/.env.local
-# package-lock.json
-# frontend/package-lock.json
 *.sqlite
 *.db
 sessions.db
