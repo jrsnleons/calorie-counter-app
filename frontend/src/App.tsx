@@ -20,7 +20,7 @@ import { Onboarding } from "./components/Onboarding";
 function App() {
     return (
         <ErrorBoundary>
-            <ThemeProvider defaultTheme="system" storageKey="app-ui-theme">
+            <ThemeProvider defaultTheme="light" storageKey="app-ui-theme">
                 <Router>
                     <AppContent />
                 </Router>

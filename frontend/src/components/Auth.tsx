@@ -110,7 +110,7 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
                     <Button
                         onClick={handleGoogleLogin}
                         disabled={isLoading}
-                        className="w-full h-11 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm font-medium"
+                        className="w-full h-11 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 shadow-sm font-medium"
                         variant="outline"
                     >
                         {isLoading ? (

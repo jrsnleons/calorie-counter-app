@@ -21,14 +21,8 @@ class RequestQueue {
     async add<T>(task: () => Promise<T>): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             const wrapper = async () => {
-                console.log(
-                    `[Queue] Starting task. Active: ${this.activeCount + 1}/${
-                        this.concurrency
-                    }`
-                );
                 try {
                     const result = await task();
-                    console.log(`[Queue] Task completed successfully.`);
                     resolve(result);
                 } catch (err) {
                     console.error(`[Queue] Task failed:`, err);
@@ -43,11 +37,6 @@ class RequestQueue {
                 this.activeCount++;
                 wrapper();
             } else {
-                console.log(
-                    `[Queue] Concurrency limit reached. Task queued. Pending: ${
-                        this.queue.length + 1
-                    }`
-                );
                 this.queue.push(wrapper);
             }
         });
@@ -264,20 +253,13 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         return res.status(401).json({ error: "Unauthorized" });
 
     try {
-        console.log(
-            `[Analyze] Request received from User ${req.session.userId}`
-        );
         const { food, image } = req.body;
 
-        // 1. Clean the Base64 image string (Remove "data:image/jpeg;base64," prefix)
+        // Clean Base64 image string
         let cleanImage = image;
         if (image && typeof image === "string" && image.includes("base64,")) {
             cleanImage = image.split("base64,")[1];
         }
-
-        console.log(
-            `[Analyze] Input processed. Has text: ${!!food}, Has image: ${!!cleanImage}`
-        );
 
         const prompt = `
         Analyze this input (image or text).
@@ -305,12 +287,10 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
             });
         }
 
-        // Add to queue for processing
-        console.log(`[Analyze] Adding request to AI Queue...`);
         const result = await aiQueue.add(() =>
             model.generateContent(inputParts)
         );
-        console.log(`[Analyze] AI generation complete. Parsing response...`);
+        
         const responseText = result.response.text();
 
         // Robust JSON extraction
@@ -518,6 +498,91 @@ app.put("/api/user", async (req: Request, res: Response): Promise<any> => {
         res.status(500).json({ error: "Failed to update profile" });
     }
 });
+
+// AI-Powered Meal Update
+app.post(
+    "/api/update-meal-ai",
+    async (req: Request, res: Response): Promise<any> => {
+        if (!req.session.userId)
+            return res.status(401).json({ error: "Unauthorized" });
+
+        const { mealId, currentMeal, editPrompt } = req.body;
+
+        if (!editPrompt || !mealId || !currentMeal) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        try {
+            const result = await aiQueue.add(async () => {
+                const genAI = new GoogleGenerativeAI(
+                    process.env.GEMINI_API_KEY || ""
+                );
+                const model = genAI.getGenerativeModel({
+                    model: "gemini-1.5-flash",
+                });
+
+                const prompt = `You are a nutrition assistant. A user has a logged meal and wants to update it.
+
+Current meal:
+- Food name: ${currentMeal.food_name}
+- Calories: ${currentMeal.calories}
+- Protein: ${currentMeal.protein}
+- Carbs: ${currentMeal.carbs}
+- Fat: ${currentMeal.fat}
+- Items: ${currentMeal.items || "None"}
+
+User's edit request: "${editPrompt}"
+
+Based on the user's request, provide the updated meal information. If they're adding food, increase values. If they're removing or reducing, decrease values. Be reasonable with estimates.
+
+Respond ONLY with valid JSON in this exact format (no markdown, no backticks):
+{
+  "food_name": "updated name",
+  "calories": number,
+  "protein": "Xg",
+  "carbs": "Xg",
+  "fat": "Xg",
+  "items": [{"name": "item name", "calories": number}]
+}`;
+
+                const aiResponse = await model.generateContent(prompt);
+                const text = aiResponse.response.text().trim();
+                
+                // Remove markdown code blocks if present
+                let cleanText = text;
+                if (text.startsWith("```")) {
+                    cleanText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                }
+                
+                const parsed = JSON.parse(cleanText);
+
+                // Update the meal in database
+                await query(
+                    `UPDATE meals SET food_name=$1, calories=$2, protein=$3, carbs=$4, fat=$5, items=$6 WHERE id=$7 AND user_id=$8`,
+                    [
+                        parsed.food_name,
+                        parsed.calories,
+                        parsed.protein,
+                        parsed.carbs,
+                        parsed.fat,
+                        JSON.stringify(parsed.items || []),
+                        mealId,
+                        req.session.userId,
+                    ]
+                );
+
+                return { success: true, updated: parsed };
+            });
+
+            res.json(result);
+        } catch (error: any) {
+            console.error("AI Update Error:", error);
+            res.status(500).json({
+                error: "Failed to update meal with AI. Please try again.",
+            });
+        }
+    }
+);
 
 // Update Meal
 app.put(
