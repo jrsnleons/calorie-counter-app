@@ -14,6 +14,13 @@ const runSchema = async () => {
         process.exit(0);
     } catch (err) {
         console.error("❌ Error applying schema:", err);
+        console.error(
+            "💡 Hint: If you are seeing 'ECONNREFUSED', it means the database connection failed."
+        );
+        console.error(
+            "   - Check if DATABASE_URL is set in your environment variables."
+        );
+        console.error("   - Ensure your database is running.");
         process.exit(1);
     }
 };

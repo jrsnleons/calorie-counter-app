@@ -1,4 +1,3 @@
-
 class ApiQueue {
     private queue: Promise<any> = Promise.resolve();
 

@@ -1,14 +1,3 @@
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +70,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     );
     const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
     const [newWeight, setNewWeight] = useState("");
+    const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+    const [historySearch, setHistorySearch] = useState("");
 
     const [shake, setShake] = useState(false);
     const [mealType, setMealType] = useState<
@@ -218,6 +209,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     };
 
     const handleAnalyze = async () => {
+        if (analyzing) return; // Prevent double-click
+
         if (mode === "text" && !textInput.trim())
             return showError("Please enter some text description!");
         if (mode === "photo" && !base64Image)
@@ -225,6 +218,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
         setAnalyzing(true);
         setResult(null);
+        toast.loading("Analyzing your meal...", { id: "analyze" });
 
         try {
             await apiQueue.add(async () => {
@@ -245,19 +239,29 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                 setBase64Image("");
                 setPreview("");
                 loadHistory();
+                toast.success("Meal tracked successfully!", { id: "analyze" });
             });
         } catch (e: any) {
             showError(e.message);
+            toast.dismiss("analyze");
         } finally {
             setAnalyzing(false);
         }
     };
 
     const deleteMeal = async (id: number) => {
+        if (deleteConfirm !== id) {
+            setDeleteConfirm(id);
+            setTimeout(() => setDeleteConfirm(null), 3000);
+            return;
+        }
+
         await apiQueue.add(async () => {
             await fetch(`/api/history/${id}`, { method: "DELETE" });
             loadHistory();
+            toast.success("Meal deleted");
         });
+        setDeleteConfirm(null);
     };
 
     const handleLogout = async () => {
@@ -267,6 +271,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
     const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
     const [editItems, setEditItems] = useState<{ name: string; calories: number }[]>([]);
+    const [editPrompt, setEditPrompt] = useState("");
+    const [isUpdatingMeal, setIsUpdatingMeal] = useState(false);
 
     useEffect(() => {
         if (editingMeal?.id) {
@@ -281,40 +287,58 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         }
     }, [editingMeal?.id]);
 
-    const updateEditItems = (newItems: { name: string; calories: number }[]) => {
-        setEditItems(newItems);
-        const newTotal = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
-        
-        if (editingMeal) {
-            setEditingMeal({
-                ...editingMeal,
-                calories: newTotal, // Update total calories
-                items: JSON.stringify(newItems) // Update items string
-            });
-        }
-    };
-
     const handleUpdateMeal = async (e?: React.MouseEvent) => {
         e?.preventDefault();
+        e?.stopPropagation();
         if (!editingMeal) return;
 
         try {
-            await apiQueue.add(async () => {
-                const res = await fetch(`/api/history/${editingMeal.id}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(editingMeal),
+            setIsUpdatingMeal(true);
+            
+            if (editPrompt.trim()) {
+                // Use AI to update the meal
+                await apiQueue.add(async () => {
+                    const res = await fetch(`/api/update-meal-ai`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            mealId: editingMeal.id,
+                            currentMeal: editingMeal,
+                            editPrompt: editPrompt,
+                        }),
+                    });
+                    
+                    if (res.ok) {
+                        toast.success("Meal updated successfully");
+                        setEditingMeal(null);
+                        setEditPrompt("");
+                        loadHistory();
+                    } else {
+                        const error = await res.json();
+                        toast.error(error.error || "Failed to update meal");
+                    }
                 });
-                if (res.ok) {
-                    toast.success("Meal updated successfully");
-                    setEditingMeal(null);
-                    loadHistory();
-                } else {
-                    toast.error("Failed to update meal");
-                }
-            });
+            } else {
+                // Just update food name and meal type
+                await apiQueue.add(async () => {
+                    const res = await fetch(`/api/history/${editingMeal.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(editingMeal),
+                    });
+                    if (res.ok) {
+                        toast.success("Meal updated successfully");
+                        setEditingMeal(null);
+                        loadHistory();
+                    } else {
+                        toast.error("Failed to update meal");
+                    }
+                });
+            }
         } catch (e) {
             toast.error("Error updating meal");
+        } finally {
+            setIsUpdatingMeal(false);
         }
     };
 
@@ -366,8 +390,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("home")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "home"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Home className="w-6 h-6 md:w-4 md:h-4" />
@@ -379,8 +403,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("history")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "history"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Calendar className="w-6 h-6 md:w-4 md:h-4" />
@@ -392,8 +416,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 onClick={() => setActiveTab("weight")}
                                 className={`flex flex-col md:flex-row items-center md:gap-2 p-2 md:px-4 md:py-2 rounded-xl transition-all ${
                                     activeTab === "weight"
-                                        ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 md:bg-purple-50 md:dark:bg-purple-900/20"
-                                        : "text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
                                 }`}
                             >
                                 <Scale className="w-6 h-6 md:w-4 md:h-4" />
@@ -452,7 +476,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                     </div>
 
                     {/* Main Content Area */}
-                    <div className="flex-1 overflow-y-auto h-full p-4 md:p-8 space-y-8 pb-24 md:pb-8 flex flex-col md:max-w-3xl md:mx-auto w-full">
+                    <div className="flex-1 overflow-y-auto h-full p-4 md:p-8 space-y-8 pb-28 md:pb-8 flex flex-col md:max-w-3xl md:mx-auto w-full scrollbar-hide">
                         {/* Mobile Header (Hidden on Desktop) */}
                         <div className="flex md:hidden justify-between items-center bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl p-4 rounded-3xl shadow-lg border border-white/20 dark:border-white/10 sticky top-4 z-50 transition-all duration-300">
                             <div className="flex items-center gap-3">
@@ -519,65 +543,50 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
 
                     {activeTab === "home" && (
-                        <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Dashboard Hero: Standard Progress Card */}
-                            <Card className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
-                                remaining < 0 
-                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50" 
-                                    : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
-                                } text-white p-6 group`}>
-                                
-                                {/* Ambient Background Effect */}
-                                <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
-                                <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
+                        <div className="space-y-6 pt-2">
+                            {/* Dashboard Hero */}
+                            <Card className={`rounded-2xl overflow-hidden relative shadow-lg transition-all ${
+                                remaining < 0
+                                    ? "bg-gradient-to-br from-red-600 to-red-500"
+                                    : "bg-gradient-to-br from-purple-600 to-fuchsia-600"
+                                } text-white`}>
 
-                                <div className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${remaining < 0 ? "text-yellow-300 opacity-20" : ""}`}>
-                                    {remaining < 0 ? <AlertTriangle className="w-32 h-32 animate-bounce" /> : <Scale className="w-32 h-32" />}
-                                </div>
-                                
-                                <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
-                                    <div className="space-y-1">
-                                         <div className="text-sm font-bold uppercase tracking-widest text-white/80">
-                                            {remaining < 0 ? "Daily Limit Exceeded" : "Calories Eaten"}
+                                <CardContent className="p-6 flex flex-col items-center justify-center text-center space-y-6">
+                                    <div className="space-y-2">
+                                         <div className="text-sm font-semibold uppercase tracking-wide text-white/90">
+                                            {remaining < 0 ? "Over Limit" : "Calories Today"}
                                         </div>
-                                        <div className="text-7xl font-black tracking-tighter drop-shadow-md">
+                                        <div className="text-6xl font-bold">
                                             {todayCalories}
                                         </div>
                                     </div>
 
                                     {/* Progress Bar */}
                                     <div className="w-full space-y-2">
-                                        <div className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${remaining < 0 ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "border-white/10"}`}>
-                                            <div 
-                                                className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
-                                                    remaining < 0 
-                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full" 
+                                        <div className="h-4 w-full bg-white/20 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-300 ${
+                                                    remaining < 0
+                                                        ? "bg-yellow-400 w-full"
                                                         : "bg-white"
                                                 }`}
                                                 style={{ width: remaining < 0 ? '100%' : `${Math.min(progress, 100)}%` }}
-                                            >
-                                                {remaining < 0 && <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest animate-pulse">Overload</span>}
-                                            </div>
+                                            />
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-8 w-full mt-4">
-                                        <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
+                                    <div className="grid grid-cols-2 gap-4 w-full">
+                                        <div className="bg-white/20 p-4 rounded-xl">
+                                            <div className="text-xs uppercase tracking-wide font-semibold mb-1 text-white/90">
                                                 Goal
                                             </div>
                                             <div className="text-2xl font-bold">
                                                 {tdee}
                                             </div>
                                         </div>
-                                        <div className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
-                                            remaining < 0 
-                                                ? "bg-red-950/30 border-red-200/50 animate-pulse" 
-                                                : "bg-white/10 border-white/10"
-                                        }`}>
-                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
-                                                {remaining < 0 ? "Over Limit" : "Remaining"}
+                                        <div className="bg-white/20 p-4 rounded-xl">
+                                            <div className="text-xs uppercase tracking-wide font-semibold mb-1 text-white/90">
+                                                {remaining < 0 ? "Over" : "Remaining"}
                                             </div>
                                             <div className="text-2xl font-bold">
                                                 {remaining < 0 ? `+${Math.abs(remaining)}` : remaining}
@@ -587,31 +596,24 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 </CardContent>
                             </Card>
 
-                            <Card>
-                                {/* ...existing code... */}
-                                <CardContent className="pt-6">
+                            <Card className="rounded-2xl shadow-lg">
+                                <CardContent className="p-6">
                                     <Tabs
                                         value={mode}
                                         onValueChange={(v) => setMode(v as any)}
                                     >
-                                        <TabsList className="grid w-full grid-cols-2 mb-4 bg-purple-50 dark:bg-purple-900/30 p-1 rounded-2xl">
-                                            <TabsTrigger
-                                                value="photo"
-                                                className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
-                                            >
-                                                <Camera className="w-4 h-4 mr-2" />{" "}
-                                                Photo Mode
+                                        <TabsList className="grid w-full grid-cols-2 mb-4">
+                                            <TabsTrigger value="photo">
+                                                <Camera className="w-4 h-4 mr-2" />
+                                                Photo
                                             </TabsTrigger>
-                                            <TabsTrigger
-                                                value="text"
-                                                className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
-                                            >
-                                                <Type className="w-4 h-4 mr-2" />{" "}
-                                                Text Mode
+                                            <TabsTrigger value="text">
+                                                <Type className="w-4 h-4 mr-2" />
+                                                Text
                                             </TabsTrigger>
                                         </TabsList>
 
-                                        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                                        <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
                                             {[
                                                 "Breakfast",
                                                 "Lunch",
@@ -629,11 +631,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                     onClick={() =>
                                                         setMealType(m as any)
                                                     }
-                                                    className={`rounded-full px-4 ${
-                                                        mealType === m
-                                                            ? "bg-purple-600 hover:bg-purple-700 text-white border-transparent"
-                                                            : "border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
-                                                    }`}
+                                                    className="rounded-full px-4"
                                                 >
                                                     {m}
                                                 </Button>
@@ -661,7 +659,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             />
 
                                             {preview ? (
-                                                <div className="relative rounded-2xl overflow-hidden border border-purple-100 dark:border-purple-800">
+                                                <div className="relative rounded-xl overflow-hidden border">
                                                     <img
                                                         src={preview}
                                                         alt="Preview"
@@ -683,12 +681,12 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             ) : (
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div
-                                                        className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
+                                                        className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:bg-secondary transition-colors flex flex-col items-center justify-center gap-3 h-40"
                                                         onClick={() =>
                                                             cameraInputRef.current?.click()
                                                         }
                                                     >
-                                                        <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
+                                                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                                             <Camera className="w-6 h-6" />
                                                         </div>
                                                         <span className="font-medium">
@@ -696,12 +694,12 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                         </span>
                                                     </div>
                                                     <div
-                                                        className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
+                                                        className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:bg-secondary transition-colors flex flex-col items-center justify-center gap-3 h-40"
                                                         onClick={() =>
                                                             fileInputRef.current?.click()
                                                         }
                                                     >
-                                                        <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
+                                                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                                             <Upload className="w-6 h-6" />
                                                         </div>
                                                         <span className="font-medium">
@@ -753,23 +751,23 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     )}
 
                                     {!analyzing && result && (
-                                        <div className="mt-6 bg-purple-50 dark:bg-purple-950/50 p-6 rounded-2xl border border-purple-100 dark:border-purple-800">
-                                            <h3 className="font-bold text-lg text-purple-900 dark:text-purple-100">
+                                        <div className="mt-6 bg-secondary/50 p-6 rounded-xl border">
+                                            <h3 className="font-bold text-lg">
                                                 {result.short_title}
                                             </h3>
-                                            <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
+                                            <div className="text-3xl font-bold text-primary my-2">
                                                 {result.total_calories} kcal
                                             </div>
-                                            
-                                            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
+
+                                            <p className="text-muted-foreground leading-relaxed text-sm">
                                                 {result.summary}
                                             </p>
 
                                             {/* Breakdown of items */}
                                             {result.items &&
                                                 result.items.length > 0 && (
-                                                    <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-800">
-                                                        <h4 className="font-semibold text-sm mb-2 opacity-70">
+                                                    <div className="mt-4 pt-4 border-t">
+                                                        <h4 className="font-semibold text-sm mb-2 text-muted-foreground">
                                                             Breakdown
                                                         </h4>
                                                         <ul className="space-y-1 text-sm">
@@ -787,7 +785,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                                                 item.name
                                                                             }
                                                                         </span>
-                                                                        <span className="font-medium text-purple-600">
+                                                                        <span className="font-medium text-primary">
                                                                             {
                                                                                 item.calories
                                                                             }
@@ -854,7 +852,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 ).map(([mType, meals]) => (
                                     <div key={mType} className="space-y-2">
                                         <div className="flex justify-between items-center px-1">
-                                            <h3 className="font-semibold text-gray-500 uppercase tracking-wide text-xs">
+                                            <h3 className="font-semibold text-muted-foreground uppercase tracking-wide text-xs">
                                                 {mType}
                                             </h3>
                                             <span className="text-xs font-bold">
@@ -866,20 +864,25 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             </span>
                                         </div>
                                         {meals.length === 0 ? (
-                                            <div className="p-4 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl text-center text-xs text-gray-400">
-                                                No {mType} logged
+                                            <div className="p-6 border border-dashed rounded-xl text-center">
+                                                <div className="text-3xl mb-2">
+                                                    {mType === "Breakfast" ? "🌅" :
+                                                     mType === "Lunch" ? "☀️" :
+                                                     mType === "Dinner" ? "🌙" : "🍿"}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">No {mType.toLowerCase()} logged yet</p>
                                             </div>
                                         ) : (
                                             meals.map((meal) => (
                                                 <Card
                                                     key={meal.id}
-                                                    className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-white dark:bg-zinc-900/50 shadow-sm"
+                                                    className="relative overflow-hidden group hover:shadow-md transition-shadow rounded-xl"
                                                 >
                                                     <div className="absolute bottom-2 right-2 flex gap-1">
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                                                             onClick={() =>
                                                                 setEditingMeal(
                                                                     meal
@@ -888,60 +891,23 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                         >
                                                             <Pencil className="w-4 h-4" />
                                                         </Button>
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger
-                                                                asChild
-                                                            >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>
-                                                                        Delete
-                                                                        Meal
-                                                                        Entry?
-                                                                    </AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        This
-                                                                        will
-                                                                        permanently
-                                                                        delete "
-                                                                        {
-                                                                            meal.food_name
-                                                                        }
-                                                                        " from
-                                                                        your
-                                                                        history.
-                                                                        This
-                                                                        action
-                                                                        cannot
-                                                                        be
-                                                                        undone.
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>
-                                                                        Cancel
-                                                                    </AlertDialogCancel>
-                                                                    <AlertDialogAction
-                                                                        onClick={() =>
-                                                                            deleteMeal(
-                                                                                meal.id
-                                                                            )
-                                                                        }
-                                                                        className="bg-red-500 hover:bg-red-600 text-white"
-                                                                    >
-                                                                        Delete
-                                                                    </AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => deleteMeal(meal.id)}
+                                                            className={`h-8 w-8 transition-colors ${
+                                                                deleteConfirm === meal.id
+                                                                    ? "bg-red-500 text-white animate-pulse hover:bg-red-600"
+                                                                    : "text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                                                            }`}
+                                                            title={deleteConfirm === meal.id ? "Click again to confirm" : "Delete meal"}
+                                                        >
+                                                            {deleteConfirm === meal.id ? (
+                                                                <AlertTriangle className="w-4 h-4" />
+                                                            ) : (
+                                                                <Trash2 className="w-4 h-4" />
+                                                            )}
+                                                        </Button>
                                                     </div>
 
                                                     <CardContent className="p-4 flex justify-between items-start">
@@ -951,7 +917,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                             </h4>
                                                             {/* Breakdown in Daily Log */}
                                                             {meal.items && (
-                                                                <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                                                                     {getSafeItems(
                                                                         meal.items
                                                                     ).map(
@@ -1014,20 +980,48 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
                     {activeTab === "history" && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <h2 className="text-2xl font-bold">History</h2>
+                            <div className="flex items-center justify-between gap-4">
+                                <h2 className="text-2xl font-bold">History</h2>
+                                <div className="flex-1 max-w-sm">
+                                    <Input
+                                        placeholder="Search meals..."
+                                        value={historySearch}
+                                        onChange={(e) => setHistorySearch(e.target.value)}
+                                        className="h-10"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Empty State for History */}
+                            {history.length === 0 ? (
+                                <div className="text-center py-16 space-y-4">
+                                    <div className="text-6xl">📊</div>
+                                    <h3 className="text-xl font-semibold">No meals logged yet</h3>
+                                    <p className="text-muted-foreground">
+                                        Start tracking your meals to see your history here!
+                                    </p>
+                                </div>
+                            ) : (
+                            <div className="space-y-6">
                             {/* Full History Grouped by Date */}
                             {Object.entries(
-                                history.reduce((acc, meal) => {
-                                    (acc[meal.date] =
-                                        acc[meal.date] || []).push(meal);
-                                    return acc;
-                                }, {} as Record<string, Meal[]>)
+                                history
+                                    .filter(meal =>
+                                        historySearch === "" ||
+                                        meal.food_name.toLowerCase().includes(historySearch.toLowerCase()) ||
+                                        meal.meal_type?.toLowerCase().includes(historySearch.toLowerCase())
+                                    )
+                                    .reduce((acc, meal) => {
+                                        (acc[meal.date] =
+                                            acc[meal.date] || []).push(meal);
+                                        return acc;
+                                    }, {} as Record<string, Meal[]>)
                             )
                                 .sort((a, b) => b[0].localeCompare(a[0]))
                                 .map(([date, meals]) => (
                                     <Card
                                         key={date}
-                                        className="p-4 border-none shadow-sm bg-white dark:bg-zinc-900/50"
+                                        className="p-4 border-none shadow-sm bg-card"
                                     >
                                         <h3 className="font-bold text-gray-500 mb-4">
                                             {new Date(date).toDateString()}
@@ -1066,6 +1060,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                         </div>
                                     </Card>
                                 ))}
+                            </div>
+                            )}
                         </div>
                     )}
 
@@ -1074,7 +1070,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                             <h2 className="text-2xl font-bold">
                                 Weight Tracker
                             </h2>
-                            <Card className="p-6 border-none shadow-sm bg-white dark:bg-zinc-900/50">
+                            <Card className="p-6 border-none shadow-sm bg-card">
                                 <h3 className="font-medium mb-4">Log Weight</h3>
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
@@ -1087,13 +1083,13 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             }
                                             className="pr-12"
                                         />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                                             kg
                                         </span>
                                     </div>
                                     <Button
                                         onClick={handleAddWeight}
-                                        className="bg-purple-600 hover:bg-purple-700"
+                                        className="bg-primary hover:opacity-90"
                                     >
                                         Log
                                     </Button>
@@ -1101,25 +1097,28 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                             </Card>
 
                             <div className="space-y-3">
-                                <h3 className="font-medium text-gray-500">
+                                <h3 className="font-medium text-muted-foreground">
                                     History
                                 </h3>
                                 {weightLogs.length === 0 ? (
-                                    <div className="text-center p-8 text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
-                                        No weight logs yet
+                                    <div className="text-center py-12 space-y-3">
+                                        <div className="text-5xl">⚖️</div>
+                                        <p className="text-muted-foreground">
+                                            Start tracking your weight to see progress over time!
+                                        </p>
                                     </div>
                                 ) : (
                                     weightLogs.map((log) => (
                                         <div
                                             key={log.id}
-                                            className="flex justify-between items-center p-4 bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-gray-800"
+                                            className="flex justify-between items-center p-4 bg-card rounded-xl border"
                                         >
                                             <span className="font-medium">
                                                 {new Date(
                                                     log.date
                                                 ).toLocaleDateString()}
                                             </span>
-                                            <span className="font-bold text-purple-600">
+                                            <span className="font-bold text-primary">
                                                 {log.weight} kg
                                             </span>
                                         </div>
@@ -1136,19 +1135,33 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
             {/* Edit Meal Modal */}
             {editingMeal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div 
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingMeal(null);
+                            setEditPrompt("");
+                        }
+                    }}
+                >
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-xl border border-gray-100 dark:border-zinc-800"
+                        className="bg-card rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-xl border"
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-lg">Edit Meal</h3>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setEditingMeal(null)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setEditingMeal(null);
+                                }}
                             >
                                 <X className="w-5 h-5" />
                             </Button>
@@ -1169,175 +1182,82 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     }
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                        Calories
-                                    </label>
-                                    <Input
-                                        type="number"
-                                        value={editingMeal.calories}
-                                        onChange={(e) =>
-                                            setEditingMeal({
-                                                ...editingMeal,
-                                                calories: Number(
-                                                    e.target.value
-                                                ),
-                                            })
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                        Meal Type
-                                    </label>
-                                    <select
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                        value={editingMeal.meal_type || "Snack"}
-                                        onChange={(e) =>
-                                            setEditingMeal({
-                                                ...editingMeal,
-                                                meal_type: e.target
-                                                    .value as any,
-                                            })
-                                        }
-                                    >
-                                        {[
-                                            "Breakfast",
-                                            "Lunch",
-                                            "Dinner",
-                                            "Snack",
-                                        ].map((t) => (
-                                            <option key={t} value={t}>
-                                                {t}
-                                            </option>
-                                        ))}
-                                    </select>
+                            
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                    Meal Type
+                                </label>
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    value={editingMeal.meal_type || "Snack"}
+                                    onChange={(e) =>
+                                        setEditingMeal({
+                                            ...editingMeal,
+                                            meal_type: e.target
+                                                .value as any,
+                                        })
+                                    }
+                                >
+                                    {[
+                                        "Breakfast",
+                                        "Lunch",
+                                        "Dinner",
+                                        "Snack",
+                                    ].map((t) => (
+                                        <option key={t} value={t}>
+                                            {t}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Current Nutrition Info - Read Only */}
+                            <div className="p-3 bg-secondary/20 rounded-lg space-y-1">
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Current Nutrition</p>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div><span className="text-gray-500">Calories:</span> <span className="font-medium">{editingMeal.calories}</span></div>
+                                    <div><span className="text-gray-500">Protein:</span> <span className="font-medium">{editingMeal.protein}</span></div>
+                                    <div><span className="text-gray-500">Carbs:</span> <span className="font-medium">{editingMeal.carbs}</span></div>
+                                    <div><span className="text-gray-500">Fat:</span> <span className="font-medium">{editingMeal.fat}</span></div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                        Prot (g)
-                                    </label>
-                                    <Input
-                                        value={String(
-                                            editingMeal.protein || ""
-                                        ).replace("g", "")}
-                                        onChange={(e) =>
-                                            setEditingMeal({
-                                                ...editingMeal,
-                                                protein: e.target.value + "g",
-                                            })
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                        Carbs (g)
-                                    </label>
-                                    <Input
-                                        value={String(
-                                            editingMeal.carbs || ""
-                                        ).replace("g", "")}
-                                        onChange={(e) =>
-                                            setEditingMeal({
-                                                ...editingMeal,
-                                                carbs: e.target.value + "g",
-                                            })
-                                        }
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                        Fat (g)
-                                    </label>
-                                    <Input
-                                        value={String(
-                                            editingMeal.fat || ""
-                                        ).replace("g", "")}
-                                        onChange={(e) =>
-                                            setEditingMeal({
-                                                ...editingMeal,
-                                                fat: e.target.value + "g",
-                                            })
-                                        }
-                                    />
-                                </div>
+                            {/* AI Edit Prompt */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                    🤖 Describe changes (AI-powered)
+                                </label>
+                                <Textarea
+                                    placeholder="e.g., 'Add 50g of rice' or 'Change portion to half' or 'Remove the bread'"
+                                    value={editPrompt}
+                                    onChange={(e) => setEditPrompt(e.target.value)}
+                                    className="min-h-[80px] resize-none"
+                                />
+                                <p className="text-xs text-gray-400">
+                                    AI will recalculate all nutrition values based on your changes
+                                </p>
                             </div>
 
-                            {/* Item Breakdown */}
+                            {/* Item Breakdown - Read Only */}
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                         Item Breakdown
                                     </label>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        type="button"
-                                        className="h-5 px-2 text-xs"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            updateEditItems([
-                                                ...editItems,
-                                                { name: "New Item", calories: 0 },
-                                            ]);
-                                        }}
-                                    >
-                                        <Plus className="w-3 h-3 mr-1" /> Add
-                                    </Button>
                                 </div>
-                                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                <div className="space-y-2 max-h-40 overflow-y-auto pr-1 scrollbar-hide">
                                     {editItems.map((item, idx) => (
                                         <div
                                             key={idx}
-                                            className="flex gap-2 items-center"
+                                            className="flex gap-2 items-center justify-between p-2 bg-secondary/10 rounded text-sm"
                                         >
-                                            <Input
-                                                className="h-8 text-sm flex-1"
-                                                value={item.name}
-                                                onChange={(e) => {
-                                                    const newItems = [...editItems];
-                                                    newItems[idx].name =
-                                                        e.target.value;
-                                                    updateEditItems(newItems);
-                                                }}
-                                            />
-                                            <Input
-                                                className="h-8 text-sm w-20"
-                                                type="number"
-                                                value={item.calories}
-                                                onChange={(e) => {
-                                                    const newItems = [...editItems];
-                                                    newItems[idx].calories = Number(
-                                                        e.target.value
-                                                    );
-                                                    updateEditItems(newItems);
-                                                }}
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                type="button"
-                                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    const newItems =
-                                                        editItems.filter(
-                                                            (_, i) => i !== idx
-                                                        );
-                                                    updateEditItems(newItems);
-                                                }}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+                                            <span className="flex-1">{item.name}</span>
+                                            <span className="text-gray-500 font-medium">{item.calories} cal</span>
                                         </div>
                                     ))}
                                     {editItems.length === 0 && (
                                         <p className="text-xs text-center text-gray-400 py-2 border border-dashed rounded-lg">
-                                            No items listed. Add one to track details.
+                                            No items listed.
                                         </p>
                                     )}
                                 </div>
@@ -1349,8 +1269,16 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                         className="w-full"
                                         type="button"
                                         onClick={handleUpdateMeal}
+                                        disabled={isUpdatingMeal}
                                     >
-                                        Save Changes
+                                        {isUpdatingMeal ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            "Save Changes"
+                                        )}
                                     </Button>
                                 </div>
                                 <div>
@@ -1358,7 +1286,13 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                         variant="outline"
                                         className="w-full"
                                         type="button"
-                                        onClick={() => setEditingMeal(null)}
+                                        disabled={isUpdatingMeal}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setEditingMeal(null);
+                                            setEditPrompt("");
+                                        }}
                                     >
                                         Cancel
                                     </Button>

@@ -1,13 +1,36 @@
-import { Auth } from "@/components/Auth";
 import { Dashboard } from "@/components/Dashboard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LandingPage } from "@/components/LandingPage";
+import { NotFound } from "@/components/NotFound";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
+import "@/lib/api-interceptor";
 import type { User } from "@/types";
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+    Navigate,
+    Route,
+    BrowserRouter as Router,
+    Routes,
+} from "react-router-dom";
+import { Auth } from "./components/Auth";
 import { Onboarding } from "./components/Onboarding";
 
 function App() {
+    return (
+        <ErrorBoundary>
+            <ThemeProvider defaultTheme="light" storageKey="app-ui-theme">
+                <Router>
+                    <AppContent />
+                </Router>
+                <Toaster position="top-center" />
+            </ThemeProvider>
+        </ErrorBoundary>
+    );
+}
+
+function AppContent() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -52,49 +75,68 @@ function App() {
         }
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+                <img
+                    src="/logo.svg"
+                    alt="Loading"
+                    className="w-16 h-16 animate-pulse shadow-lg rounded-2xl"
+                />
+            </div>
+        );
+    }
+
     return (
-        <ThemeProvider defaultTheme="system" storageKey="app-ui-theme">
-            {loading ? (
-                <div className="max-w-2xl mx-auto p-4 space-y-6 pb-20">
-                    {/* Header Skeleton */}
-                    <div className="flex justify-between items-center bg-white dark:bg-zinc-950 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-800 sticky top-4 z-10">
-                        <Skeleton className="h-8 w-32" />
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                    </div>
+        <Routes>
+            {/* Landing Page (Public) */}
+            <Route
+                path="/"
+                element={
+                    user ? (
+                        <Navigate to="/home" replace />
+                    ) : (
+                        <LandingPage />
+                    )
+                }
+            />
 
-                    {/* Main Card Skeleton */}
-                    <div className="bg-card rounded-xl border shadow-sm p-6 space-y-6">
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                        </div>
-                        <Skeleton className="h-48 w-full rounded-lg" />
-                        <Skeleton className="h-10 w-full" />
-                    </div>
+            {/* Login/Auth Page (Public) */}
+            <Route
+                path="/login"
+                element={
+                    user ? (
+                        <Navigate to="/home" replace />
+                    ) : (
+                        <Auth onLogin={() => window.location.reload()} />
+                    )
+                }
+            />
 
-                    {/* History Breakdown Skeleton */}
-                    <Skeleton className="h-8 w-48" />
-                    <div className="space-y-4">
-                        <Skeleton className="h-32 w-full rounded-xl" />
-                        <Skeleton className="h-32 w-full rounded-xl" />
-                        <Skeleton className="h-32 w-full rounded-xl" />
-                    </div>
-                </div>
-            ) : user ? (
-                !user.tdee ? (
-                    <Onboarding onComplete={handleOnboardingComplete} />
-                ) : (
-                    <Dashboard
-                        user={user}
-                        onLogout={() => setUser(null)}
-                        onUpdateUser={checkUser}
-                    />
-                )
-            ) : (
-                <Auth onLogin={() => window.location.reload()} />
-            )}
-            <Toaster position="top-center" />
-        </ThemeProvider>
+            {/* Main App (Protected) */}
+            <Route
+                path="/home"
+                element={
+                    !user ? (
+                        <Navigate to="/" replace />
+                    ) : !user.tdee ? (
+                        <Onboarding onComplete={handleOnboardingComplete} />
+                    ) : (
+                        <Dashboard
+                            user={user}
+                            onLogout={() => {
+                                setUser(null);
+                                window.location.href = "/";
+                            }}
+                            onUpdateUser={checkUser}
+                        />
+                    )
+                }
+            />
+
+            {/* 404 Not Found */}
+            <Route path="*" element={<NotFound />} />
+        </Routes>
     );
 }
 
