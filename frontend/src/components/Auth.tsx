@@ -35,7 +35,9 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
     const handleGoogleLogin = async () => {
         setIsLoading(true);
         try {
-            const configRes = await fetch("/api/config");
+            const configRes = await fetch("/api/config", {
+                credentials: "include",
+            });
             const config = await configRes.json();
 
             if (window.google) {
@@ -46,6 +48,7 @@ export function Auth({ onLogin }: { onLogin: () => void }) {
                             const res = await fetch("/api/auth/google", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
+                                credentials: "include",
                                 body: JSON.stringify({
                                     token: response.credential,
                                 }),
