@@ -78,12 +78,28 @@ const client = new OAuth2Client(googleClientId);
 // Initialize DB Session Store
 const PgSession = connectPgSimple(session);
 
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+// CORS configuration for separate frontend deployment
+const allowedOrigins = [
+    process.env.FRONTEND_URL || "http://localhost:5173",
+    "http://localhost:5173",
+    "http://localhost:3000",
+];
 
-// Serve built frontend files from public folder
-// Note: adjusting path to go up one level since we are in src/
-app.use(express.static(path.join(__dirname, "../public")));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl)
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, "")))) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
+        },
+        credentials: true,
+    })
+);
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/config", (req: Request, res: Response) => {
     res.json({
@@ -290,7 +306,7 @@ app.post("/api/analyze", async (req: Request, res: Response): Promise<any> => {
         const result = await aiQueue.add(() =>
             model.generateContent(inputParts)
         );
-        
+
         const responseText = result.response.text();
 
         // Robust JSON extraction
@@ -547,13 +563,13 @@ Respond ONLY with valid JSON in this exact format (no markdown, no backticks):
 
                 const aiResponse = await model.generateContent(prompt);
                 const text = aiResponse.response.text().trim();
-                
+
                 // Remove markdown code blocks if present
                 let cleanText = text;
                 if (text.startsWith("```")) {
                     cleanText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                 }
-                
+
                 const parsed = JSON.parse(cleanText);
 
                 // Update the meal in database
@@ -618,14 +634,12 @@ app.put(
     }
 );
 
-// Serve static files from the public directory
-app.use(express.static(path.join(__dirname, "../public")));
-
-// Serve index.html for all other routes (client-side routing)
-app.use((req, res) => {
-    res.sendFile(path.join(__dirname, "../public/index.html"));
+// Health check endpoint for Railway
+app.get("/health", (req: Request, res: Response) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
+    console.log(`🚀 Backend server running on port ${PORT}`);
+    console.log(`📡 Accepting requests from: ${process.env.FRONTEND_URL || "localhost"}`);
 });

@@ -11,7 +11,6 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const express_1 = __importDefault(require("express"));
 const express_session_1 = __importDefault(require("express-session"));
 const google_auth_library_1 = require("google-auth-library");
-const path_1 = __importDefault(require("path"));
 const database_1 = require("./database");
 class RequestQueue {
     constructor(concurrency) {
@@ -66,11 +65,27 @@ if (!googleClientId) {
 const client = new google_auth_library_1.OAuth2Client(googleClientId);
 // Initialize DB Session Store
 const PgSession = (0, connect_pg_simple_1.default)(express_session_1.default);
-app.use((0, cors_1.default)());
+// CORS configuration for separate frontend deployment
+const allowedOrigins = [
+    process.env.FRONTEND_URL || "http://localhost:5173",
+    "http://localhost:5173",
+    "http://localhost:3000",
+];
+app.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, "")))) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true,
+}));
 app.use(express_1.default.json({ limit: "10mb" }));
-// Serve built frontend files from public folder
-// Note: adjusting path to go up one level since we are in src/
-app.use(express_1.default.static(path_1.default.join(__dirname, "../public")));
 app.get("/api/config", (req, res) => {
     res.json({
         googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -488,12 +503,11 @@ app.put("/api/history/:id", async (req, res) => {
         res.status(500).json({ error: "Could not update meal" });
     }
 });
-// Serve static files from the public directory
-app.use(express_1.default.static(path_1.default.join(__dirname, "../public")));
-// Serve index.html for all other routes (client-side routing)
-app.use((req, res) => {
-    res.sendFile(path_1.default.join(__dirname, "../public/index.html"));
+// Health check endpoint for Railway
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
+    console.log(`🚀 Backend server running on port ${PORT}`);
+    console.log(`📡 Accepting requests from: ${process.env.FRONTEND_URL || "localhost"}`);
 });

@@ -24,7 +24,7 @@
     "scripts": {
         "start": "node dist/setup_db.js && node dist/server.js",
         "dev": "ts-node src/server.ts",
-        "build": "tsc && cd frontend && npm install --production=false && npm run build && cd .. && rm -rf public && mkdir public && cp -r frontend/dist/* public/",
+        "build": "tsc",
         "db:setup": "ts-node src/setup_db.ts"
     },
     "devDependencies": {}
