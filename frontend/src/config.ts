@@ -1,6 +1,13 @@
 // Resolve API base URL with safe fallbacks so production never calls localhost
 const resolveApiUrl = () => {
     const envUrl = import.meta.env.VITE_API_URL?.trim();
+    
+    console.log('🔍 Environment check:', {
+        VITE_API_URL: envUrl,
+        isDev: import.meta.env.DEV,
+        mode: import.meta.env.MODE
+    });
+    
     if (envUrl) return envUrl.replace(/\/$/, "");
 
     // During local dev, default to the local backend
@@ -13,6 +20,8 @@ const resolveApiUrl = () => {
 };
 
 export const API_URL = resolveApiUrl();
+
+console.log('🚀 API_URL resolved to:', API_URL);
 
 // Helper function to build API URLs
 export const apiUrl = (path: string) => {
