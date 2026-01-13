@@ -3,8 +3,8 @@ const PRODUCTION_BACKEND = "https://backend-server-production-44a5.up.railway.ap
 const LOCAL_BACKEND = "http://localhost:3000";
 
 // Only use localhost if explicitly in dev mode AND running on localhost
-const isLocalDev = import.meta.env.DEV && 
-                   typeof window !== "undefined" && 
+const isLocalDev = import.meta.env.DEV &&
+                   typeof window !== "undefined" &&
                    window.location.hostname === "localhost";
 
 export const API_URL = isLocalDev ? LOCAL_BACKEND : PRODUCTION_BACKEND;

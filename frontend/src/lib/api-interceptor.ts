@@ -4,11 +4,20 @@ import { apiUrl } from "@/config";
 const originalFetch = window.fetch;
 
 window.fetch = async (...args) => {
-    // Convert relative API URLs to absolute URLs
+    // Convert relative API URLs to absolute URLs and ensure credentials are included
     let url = args[0];
+    let options = args[1] || {};
+    
     if (typeof url === "string" && url.startsWith("/api")) {
         url = apiUrl(url);
         args[0] = url;
+        
+        // Ensure credentials are always included for API calls
+        options = {
+            ...options,
+            credentials: "include"
+        };
+        args[1] = options;
     }
 
     const response = await originalFetch(...args);
