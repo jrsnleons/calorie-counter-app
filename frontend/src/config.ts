@@ -2,6 +2,13 @@
 const PRODUCTION_BACKEND = "https://backend-server-production-44a5.up.railway.app";
 const LOCAL_BACKEND = "http://localhost:3000";
 
+console.log('🔍 Environment variables:', {
+    VITE_API_URL: import.meta.env.VITE_API_URL,
+    DEV: import.meta.env.DEV,
+    MODE: import.meta.env.MODE,
+    allEnvVars: import.meta.env
+});
+
 // Only use localhost if explicitly in dev mode AND running on localhost
 const isLocalDev = import.meta.env.DEV &&
                    typeof window !== "undefined" &&
