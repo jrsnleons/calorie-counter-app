@@ -1,18 +1,15 @@
-// Resolve API base URL with safe fallbacks so production never calls localhost
-const resolveApiUrl = () => {
-    // Force production backend URL
-    const PRODUCTION_BACKEND = "https://backend-server-production-44a5.up.railway.app";
-    
-    // During local dev, use localhost
-    if (import.meta.env.DEV) return "http://localhost:3000";
-    
-    // In production, always use the Railway backend
-    return PRODUCTION_BACKEND;
-};
+// Force production backend URL - no environment variables, just hardcoded
+const PRODUCTION_BACKEND = "https://backend-server-production-44a5.up.railway.app";
+const LOCAL_BACKEND = "http://localhost:3000";
 
-export const API_URL = resolveApiUrl();
+// Only use localhost if explicitly in dev mode AND running on localhost
+const isLocalDev = import.meta.env.DEV && 
+                   typeof window !== "undefined" && 
+                   window.location.hostname === "localhost";
 
-console.log('🚀 API_URL resolved to:', API_URL);
+export const API_URL = isLocalDev ? LOCAL_BACKEND : PRODUCTION_BACKEND;
+
+console.log('🚀 API_URL resolved to:', API_URL, 'isDev:', import.meta.env.DEV, 'hostname:', typeof window !== "undefined" ? window.location.hostname : 'N/A');
 
 // Helper function to build API URLs
 export const apiUrl = (path: string) => {
