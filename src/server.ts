@@ -4,10 +4,10 @@ import connectPgSimple from "connect-pg-simple";
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
-import session from "express-session";
-import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import session from "express-session";
 import { OAuth2Client } from "google-auth-library";
+import helmet from "helmet";
 import path from "path";
 import { z } from "zod";
 import { pool, query } from "./database";
@@ -73,9 +73,9 @@ app.use(helmet());
 
 // Rate Limiter: 100 reqs per 15 mins
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 100, 
-    standardHeaders: true, 
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
@@ -95,6 +95,7 @@ const PgSession = connectPgSimple(session);
 
 // CORS configuration for separate frontend deployment
 const allowedOrigins = [
+    process.env.ADMIN_URL,
     process.env.FRONTEND_URL || "http://localhost:5173",
     "https://pakals.up.railway.app",
     "http://localhost:5173",
@@ -249,7 +250,7 @@ const UpdateUserSchema = z.object({
 
 app.post("/api/user/update", async (req: Request, res: Response) => {
     if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-    
+
     // Validate Input
     const parse = UpdateUserSchema.safeParse(req.body);
     if (!parse.success) {
@@ -272,7 +273,7 @@ app.post("/api/user/update", async (req: Request, res: Response) => {
 
         values.push(req.session.userId);
         const q = `UPDATE users SET ${updates.join(", ")} WHERE id = $${idx} RETURNING *`;
-        
+
         const result = await query(q, values);
         res.json({ success: true, user: result.rows[0] });
     } catch (e: any) {
@@ -1249,13 +1250,13 @@ app.get("/health", (req: Request, res: Response) => {
 const adminAuth = (req: Request, res: Response, next: any) => {
     const secret = req.headers["x-admin-secret"];
     const validSecret = process.env.ADMIN_SECRET;
-    
+
     // Critical Security Check: If no secret is configured, disable admin access completely.
     if (!validSecret) {
         console.error("[CRITICAL SECURITY] ADMIN_SECRET env var is not set. Locking down admin panel.");
         return res.status(500).json({ error: "Server Configuration Error: Admin Access Disabled" });
     }
-    
+
     if (secret !== validSecret) {
         console.log(`[Admin Auth Failed]`);
         res.status(401).json({ error: "Unauthorized Admin Access" });
@@ -1269,7 +1270,7 @@ app.get("/api/admin/stats", adminAuth, async (req: Request, res: Response) => {
         const userCount = await query(`SELECT COUNT(*) FROM users`);
         const mealCount = await query(`SELECT COUNT(*) FROM meals`);
         const weightCount = await query(`SELECT COUNT(*) FROM weight_logs`);
-        
+
         res.json({
             users: parseInt(userCount.rows[0].count),
             meals: parseInt(mealCount.rows[0].count),
@@ -1284,9 +1285,9 @@ app.get("/api/admin/users", adminAuth, async (req: Request, res: Response) => {
     try {
         // Return most recent 50 users
         const result = await query(`
-            SELECT id, name, username, created_at, last_log_date, current_streak 
-            FROM users 
-            ORDER BY created_at DESC 
+            SELECT id, name, username, created_at, last_log_date, current_streak
+            FROM users
+            ORDER BY created_at DESC
             LIMIT 50
         `);
         res.json(result.rows);
@@ -1300,12 +1301,12 @@ app.post("/api/admin/users/:id/update", adminAuth, async (req: Request, res: Res
     try {
         const { id } = req.params;
         const { tdee, goal, name, current_streak, height, weight, activity_level } = req.body;
-        
+
         // Build dynamic update query
         const updates = [];
         const values = [];
         let idx = 1;
-        
+
         if (tdee !== undefined) { updates.push(`tdee = $${idx++}`); values.push(tdee); }
         if (goal !== undefined) { updates.push(`goal = $${idx++}`); values.push(goal); }
         if (name !== undefined) { updates.push(`name = $${idx++}`); values.push(name); }
@@ -1313,12 +1314,12 @@ app.post("/api/admin/users/:id/update", adminAuth, async (req: Request, res: Res
         if (height !== undefined) { updates.push(`height = $${idx++}`); values.push(height); }
         if (weight !== undefined) { updates.push(`weight = $${idx++}`); values.push(weight); }
         if (activity_level !== undefined) { updates.push(`activity_level = $${idx++}`); values.push(activity_level); }
-        
+
         if (updates.length === 0) return res.json({ message: "No changes" });
-        
+
         values.push(id);
         const q = `UPDATE users SET ${updates.join(", ")} WHERE id = $${idx} RETURNING *`;
-        
+
         const result = await query(q, values);
         res.json({ success: true, user: result.rows[0] });
     } catch (e: any) {
@@ -1335,7 +1336,7 @@ app.delete("/api/admin/users/:id", adminAuth, async (req: Request, res: Response
         await query(`DELETE FROM achievements WHERE user_id = $1`, [id]);
         // Finally delete user
         await query(`DELETE FROM users WHERE id = $1`, [id]);
-        
+
         res.json({ success: true, message: "User deleted" });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -1347,7 +1348,7 @@ app.get("/api/admin/users/:id/history", adminAuth, async (req: Request, res: Res
         const { id } = req.params;
         const meals = await query(`SELECT * FROM meals WHERE user_id = $1 ORDER BY date DESC LIMIT 50`, [id]);
         const weights = await query(`SELECT * FROM weight_logs WHERE user_id = $1 ORDER BY date DESC LIMIT 50`, [id]);
-        
+
         res.json({
             meals: meals.rows,
             weights: weights.rows
