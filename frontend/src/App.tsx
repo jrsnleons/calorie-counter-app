@@ -7,7 +7,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types";
-import { ComponentType, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import {
     Navigate,

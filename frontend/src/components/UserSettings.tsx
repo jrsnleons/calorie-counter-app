@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { toast } from "sonner";
-import { Settings, Trash2, AlertTriangle } from "lucide-react";
+import { Settings, Trash2 } from "lucide-react";
 
 export function UserSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
     const [open, setOpen] = useState(false);
