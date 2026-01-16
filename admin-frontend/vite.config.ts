@@ -16,6 +16,7 @@ export default defineConfig({
   },
   preview: {
     port: 4173,
-    host: true
+    host: true,
+    allowedHosts: ["admin-pakals.up.railway.app"]
   }
 })
