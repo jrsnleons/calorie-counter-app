@@ -95,7 +95,7 @@ const PgSession = connectPgSimple(session);
 
 // CORS configuration for separate frontend deployment
 const allowedOrigins = [
-    process.env.ADMIN_URL,
+    process.env.ADMIN_URL || "https://admin-pakals.up.railway.app",
     process.env.FRONTEND_URL || "http://localhost:5173",
     "https://pakals.up.railway.app",
     "http://localhost:5173",
