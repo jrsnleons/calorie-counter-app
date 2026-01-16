@@ -9,6 +9,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { UserSettings } from "@/components/UserSettings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiQueue } from "@/lib/api-queue";
+import { useOfflineStatus } from "@/lib/offline-queue";
 import type { Meal, User, WeightLog } from "@/types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -33,6 +35,7 @@ import {
     Camera,
     ChevronLeft,
     ChevronRight,
+    Flame,
     Home,
     Loader2,
     LogOut,
@@ -43,11 +46,16 @@ import {
     Trash2,
     Type,
     Upload,
+    WifiOff,
     X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Charts } from "./Charts";
+import { Gamification } from "./Gamification";
+import { GoalWizard } from "./GoalWizard";
 import { Settings } from "./Settings";
+import { WeightChart } from "./WeightChart";
 
 interface AnalysisResult {
     short_title: string;
@@ -63,7 +71,9 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
-    const [view, setView] = useState<"dashboard" | "settings">("dashboard");
+    const [view, setView] = useState<"dashboard" | "settings" | "goals">(
+        "dashboard"
+    );
     const [mode, setMode] = useState<"photo" | "text">("photo");
     const [textInput, setTextInput] = useState("");
     const [base64Image, setBase64Image] = useState("");
@@ -79,8 +89,13 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     const [activeTab, setActiveTab] = useState<"home" | "history" | "weight">(
         "home"
     );
+    const [historyTab, setHistoryTab] = useState<"meals" | "charts">("meals");
+    const [showGamification, setShowGamification] = useState(false);
     const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
     const [newWeight, setNewWeight] = useState("");
+
+    // Offline status
+    const { isOnline, pendingCount } = useOfflineStatus();
 
     const [shake, setShake] = useState(false);
     const [mealType, setMealType] = useState<
@@ -98,7 +113,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
 
     const getSafeItems = (items: any) => {
         try {
-            const parsed = typeof items === "string" ? JSON.parse(items) : items;
+            const parsed =
+                typeof items === "string" ? JSON.parse(items) : items;
             return Array.isArray(parsed) ? parsed : [];
         } catch {
             return [];
@@ -183,9 +199,45 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                     }),
                 });
                 if (res.ok) {
+                    const data = await res.json();
                     setNewWeight("");
                     loadWeightLogs();
-                    toast.success("Weight recorded!");
+                    onUpdateUser(); // Refresh global user state
+
+                    // Smart Suggestion Logic
+                    if (
+                        data.suggestedTDEE &&
+                        Math.abs(data.suggestedTDEE - (user.tdee || 2000)) > 50
+                    ) {
+                        toast("New Calorie Goal?", {
+                            description: `Based on your new weight, your daily goal should be ${data.suggestedTDEE} kcal.`,
+                            action: {
+                                label: "Update",
+                                onClick: async () => {
+                                    try {
+                                        await fetch("/api/user", {
+                                            method: "PUT",
+                                            headers: {
+                                                "Content-Type":
+                                                    "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                                tdee: data.suggestedTDEE,
+                                            }),
+                                        });
+                                        onUpdateUser();
+                                        toast.success(
+                                            `Goal updated to ${data.suggestedTDEE} kcal!`
+                                        );
+                                    } catch {
+                                        toast.error("Failed to update goal");
+                                    }
+                                },
+                            },
+                        });
+                    } else {
+                        toast.success("Weight recorded!");
+                    }
                 }
             });
         } catch (e) {
@@ -217,6 +269,25 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         setTimeout(() => setShake(false), 500);
     };
 
+    const updateStreak = async () => {
+        try {
+            const res = await fetch("/api/streaks/update", { method: "POST" });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.newAchievements?.length > 0) {
+                    data.newAchievements.forEach((ach: string) => {
+                        toast.success(`🏆 Achievement Unlocked: ${ach}!`, {
+                            duration: 5000,
+                        });
+                    });
+                }
+                onUpdateUser(); // Refresh user data to get updated streak
+            }
+        } catch (e) {
+            console.error("Failed to update streak", e);
+        }
+    };
+
     const handleAnalyze = async () => {
         if (mode === "text" && !textInput.trim())
             return showError("Please enter some text description!");
@@ -245,6 +316,7 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                 setBase64Image("");
                 setPreview("");
                 loadHistory();
+                updateStreak(); // Update streak after successful meal log
             });
         } catch (e: any) {
             showError(e.message);
@@ -266,12 +338,16 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
     };
 
     const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
-    const [editItems, setEditItems] = useState<{ name: string; calories: number }[]>([]);
+    const [editItems, setEditItems] = useState<
+        { name: string; calories: number }[]
+    >([]);
 
     useEffect(() => {
         if (editingMeal?.id) {
             try {
-                const parsed = editingMeal.items ? JSON.parse(editingMeal.items) : [];
+                const parsed = editingMeal.items
+                    ? JSON.parse(editingMeal.items)
+                    : [];
                 setEditItems(parsed);
             } catch {
                 setEditItems([]);
@@ -281,15 +357,20 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
         }
     }, [editingMeal?.id]);
 
-    const updateEditItems = (newItems: { name: string; calories: number }[]) => {
+    const updateEditItems = (
+        newItems: { name: string; calories: number }[]
+    ) => {
         setEditItems(newItems);
-        const newTotal = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+        const newTotal = newItems.reduce(
+            (sum, item) => sum + (Number(item.calories) || 0),
+            0
+        );
 
         if (editingMeal) {
             setEditingMeal({
                 ...editingMeal,
                 calories: newTotal, // Update total calories
-                items: JSON.stringify(newItems) // Update items string
+                items: JSON.stringify(newItems), // Update items string
             });
         }
     };
@@ -333,6 +414,26 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         user={user}
                         onBack={() => setView("dashboard")}
                         onUpdateUser={onUpdateUser}
+                        onNavigateToWeight={() => {
+                            setView("dashboard");
+                            setActiveTab("weight");
+                        }}
+                        onNavigateToGoal={() => setView("goals")}
+                    />
+                </motion.div>
+            ) : view === "goals" ? (
+                <motion.div
+                    key="goals"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="h-full pt-16 px-4"
+                >
+                    <GoalWizard
+                        user={user}
+                        onBack={() => setView("settings")}
+                        onUpdateUser={onUpdateUser}
                     />
                 </motion.div>
             ) : (
@@ -346,6 +447,19 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         shake ? "animate-shake" : ""
                     }`}
                 >
+                    {/* Offline Status Banner */}
+                    {!isOnline && (
+                        <div className="bg-orange-500 text-white text-center py-2 px-4 text-sm flex items-center justify-center gap-2">
+                            <WifiOff className="w-4 h-4" />
+                            You're offline. Changes will sync when you're back
+                            online.
+                            {pendingCount > 0 && (
+                                <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                                    {pendingCount} pending
+                                </span>
+                            )}
+                        </div>
+                    )}
                     {/* Desktop Topbar / Mobile Navbar Logic */}
                     <div className="order-last md:order-first md:w-full md:border-b md:border-gray-100 md:dark:border-gray-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl md:bg-white/50 md:backdrop-blur-md p-2 md:px-8 md:py-3 flex md:flex-row justify-around md:justify-start items-center fixed md:relative bottom-0 left-0 right-0 z-50 md:z-50 gap-4">
                         {/* Logo for Desktop */}
@@ -404,7 +518,21 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         </div>
 
                         {/* Desktop User Menu at Right */}
-                        <div className="hidden md:flex ml-auto border-l border-gray-100 dark:border-gray-800 pl-4">
+                        <div className="hidden md:flex ml-auto border-l border-gray-100 dark:border-gray-800 pl-4 items-center gap-3">
+                            {/* Streak Badge */}
+                            <button
+                                onClick={() => setShowGamification(true)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl"
+                            >
+                                <Flame className="w-4 h-4" />
+                                <span className="font-bold">
+                                    {user.current_streak || 0}
+                                </span>
+                                <span className="text-xs">
+                                    day{user.current_streak !== 1 ? "s" : ""}
+                                </span>
+                            </button>
+
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -432,12 +560,9 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     align="end"
                                     forceMount
                                 >
-                                    <DropdownMenuItem
-                                        onClick={() => setView("settings")}
-                                    >
-                                        <SettingsIcon className="mr-2 h-4 w-4" />
-                                        <span>Settings</span>
-                                    </DropdownMenuItem>
+                                    <div className="p-2">
+                                         <UserSettings user={user} onUpdate={onUpdateUser} />
+                                    </div>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         onClick={handleLogout}
@@ -466,670 +591,843 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                 </h1>
                             </div>
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        className="relative h-10 w-10 rounded-full"
-                                    >
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarImage
-                                                src={user.avatar}
-                                                alt={user.name}
-                                            />
-                                            <AvatarFallback>
-                                                {user.name?.charAt(0) || "U"}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    className="w-56"
-                                    align="end"
-                                    forceMount
+                            <div className="flex items-center gap-2">
+                                {/* Streak Badge */}
+                                <button
+                                    onClick={() => setShowGamification(true)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md"
                                 >
-                                    <DropdownMenuLabel className="font-normal">
-                                        <div className="flex flex-col space-y-1">
-                                            <p className="text-sm font-medium leading-none">
-                                                {user.name}
-                                            </p>
-                                            <p className="text-xs leading-none text-muted-foreground">
-                                                {user.username}
-                                            </p>
-                                        </div>
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        onClick={() => setView("settings")}
+                                    <Flame className="w-4 h-4" />
+                                    <span className="font-bold text-sm">
+                                        {user.current_streak || 0}
+                                    </span>
+                                </button>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className="relative h-10 w-10 rounded-full"
+                                        >
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarImage
+                                                    src={user.avatar}
+                                                    alt={user.name}
+                                                />
+                                                <AvatarFallback>
+                                                    {user.name?.charAt(0) ||
+                                                        "U"}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        className="w-56"
+                                        align="end"
+                                        forceMount
                                     >
-                                        <SettingsIcon className="mr-2 h-4 w-4" />
-                                        <span>Settings</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        onClick={handleLogout}
-                                        className="text-red-600 focus:text-red-600"
-                                    >
-                                        <LogOut className="mr-2 h-4 w-4" />
-                                        <span>Log out</span>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                        <DropdownMenuLabel className="font-normal">
+                                            <div className="flex flex-col space-y-1">
+                                                <p className="text-sm font-medium leading-none">
+                                                    {user.name}
+                                                </p>
+                                                <p className="text-xs leading-none text-muted-foreground">
+                                                    {user.username}
+                                                </p>
+                                            </div>
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={() => setView("settings")}
+                                        >
+                                            <SettingsIcon className="mr-2 h-4 w-4" />
+                                            <span>Settings</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={handleLogout}
+                                            className="text-red-600 focus:text-red-600"
+                                        >
+                                            <LogOut className="mr-2 h-4 w-4" />
+                                            <span>Log out</span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         </div>
 
+                        {activeTab === "home" && (
+                            <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {/* Dashboard Hero: Standard Progress Card */}
+                                <Card
+                                    className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
+                                        remaining < 0
+                                            ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50"
+                                            : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
+                                    } text-white p-6 group`}
+                                >
+                                    {/* Ambient Background Effect */}
+                                    <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
+                                    <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
 
-                    {activeTab === "home" && (
-                        <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Dashboard Hero: Standard Progress Card */}
-                            <Card className={`rounded-[2.5rem] border-none overflow-hidden relative shadow-2xl transition-all duration-1000 ${
-                                remaining < 0
-                                    ? "bg-gradient-to-br from-red-600 via-orange-600 to-red-500 animate-pulse-fast ring-4 ring-red-400/50"
-                                    : "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 animate-gradient-xy ring-1 ring-white/10"
-                                } text-white p-6 group`}>
-
-                                {/* Ambient Background Effect */}
-                                <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl animate-float-slow pointer-events-none" />
-                                <div className="absolute bottom-[-10%] left-[-10%] w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-medium pointer-events-none" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
-
-                                <div className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${remaining < 0 ? "text-yellow-300 opacity-20" : ""}`}>
-                                    {remaining < 0 ? <AlertTriangle className="w-32 h-32 animate-bounce" /> : <Scale className="w-32 h-32" />}
-                                </div>
-
-                                <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
-                                    <div className="space-y-1">
-                                         <div className="text-sm font-bold uppercase tracking-widest text-white/80">
-                                            {remaining < 0 ? "Daily Limit Exceeded" : "Calories Eaten"}
-                                        </div>
-                                        <div className="text-7xl font-black tracking-tighter drop-shadow-md">
-                                            {todayCalories}
-                                        </div>
-                                    </div>
-
-                                    {/* Progress Bar */}
-                                    <div className="w-full space-y-2">
-                                        <div className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${remaining < 0 ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "border-white/10"}`}>
-                                            <div
-                                                className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
-                                                    remaining < 0
-                                                        ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full"
-                                                        : "bg-white"
-                                                }`}
-                                                style={{ width: remaining < 0 ? '100%' : `${Math.min(progress, 100)}%` }}
-                                            >
-                                                {remaining < 0 && <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest animate-pulse">Overload</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-8 w-full mt-4">
-                                        <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
-                                                Goal
-                                            </div>
-                                            <div className="text-2xl font-bold">
-                                                {tdee}
-                                            </div>
-                                        </div>
-                                        <div className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
+                                    <div
+                                        className={`absolute top-4 right-4 p-4 opacity-10 group-hover:opacity-20 transition-all duration-700 transform group-hover:scale-110 group-hover:rotate-12 ${
                                             remaining < 0
-                                                ? "bg-red-950/30 border-red-200/50 animate-pulse"
-                                                : "bg-white/10 border-white/10"
-                                        }`}>
-                                            <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
-                                                {remaining < 0 ? "Over Limit" : "Remaining"}
-                                            </div>
-                                            <div className="text-2xl font-bold">
-                                                {remaining < 0 ? `+${Math.abs(remaining)}` : remaining}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                {/* ...existing code... */}
-                                <CardContent className="pt-6">
-                                    <Tabs
-                                        value={mode}
-                                        onValueChange={(v) => setMode(v as any)}
+                                                ? "text-yellow-300 opacity-20"
+                                                : ""
+                                        }`}
                                     >
-                                        <TabsList className="grid w-full grid-cols-2 mb-4 bg-purple-50 dark:bg-purple-900/30 p-1 rounded-2xl">
-                                            <TabsTrigger
-                                                value="photo"
-                                                className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
-                                            >
-                                                <Camera className="w-4 h-4 mr-2" />{" "}
-                                                Photo Mode
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="text"
-                                                className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
-                                            >
-                                                <Type className="w-4 h-4 mr-2" />{" "}
-                                                Text Mode
-                                            </TabsTrigger>
-                                        </TabsList>
-
-                                        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
-                                            {[
-                                                "Breakfast",
-                                                "Lunch",
-                                                "Dinner",
-                                                "Snack",
-                                            ].map((m) => (
-                                                <Button
-                                                    key={m}
-                                                    variant={
-                                                        mealType === m
-                                                            ? "default"
-                                                            : "outline"
-                                                    }
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setMealType(m as any)
-                                                    }
-                                                    className={`rounded-full px-4 ${
-                                                        mealType === m
-                                                            ? "bg-purple-600 hover:bg-purple-700 text-white border-transparent"
-                                                            : "border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
-                                                    }`}
-                                                >
-                                                    {m}
-                                                </Button>
-                                            ))}
-                                        </div>
-
-                                        <TabsContent
-                                            value="photo"
-                                            className="space-y-4"
-                                        >
-                                            <input
-                                                type="file"
-                                                ref={fileInputRef}
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={handleFileChange}
-                                            />
-                                            <input
-                                                type="file"
-                                                ref={cameraInputRef}
-                                                className="hidden"
-                                                accept="image/*"
-                                                capture="environment"
-                                                onChange={handleFileChange}
-                                            />
-
-                                            {preview ? (
-                                                <div className="relative rounded-2xl overflow-hidden border border-purple-100 dark:border-purple-800">
-                                                    <img
-                                                        src={preview}
-                                                        alt="Preview"
-                                                        className="w-full h-auto max-h-96 object-contain bg-black"
-                                                    />
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="icon"
-                                                        className="absolute top-2 right-2 rounded-full shadow-lg"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setPreview("");
-                                                            setBase64Image("");
-                                                        }}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div
-                                                        className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
-                                                        onClick={() =>
-                                                            cameraInputRef.current?.click()
-                                                        }
-                                                    >
-                                                        <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
-                                                            <Camera className="w-6 h-6" />
-                                                        </div>
-                                                        <span className="font-medium">
-                                                            Take Photo
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
-                                                        onClick={() =>
-                                                            fileInputRef.current?.click()
-                                                        }
-                                                    >
-                                                        <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
-                                                            <Upload className="w-6 h-6" />
-                                                        </div>
-                                                        <span className="font-medium">
-                                                            Upload
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </TabsContent>
-
-                                        <TabsContent value="text">
-                                            <Textarea
-                                                placeholder="Describe your meal..."
-                                                value={textInput}
-                                                onChange={(e) =>
-                                                    setTextInput(e.target.value)
-                                                }
-                                                className="h-32"
-                                            />
-                                        </TabsContent>
-                                    </Tabs>
-
-                                    <Button
-                                        className="w-full mt-4"
-                                        onClick={handleAnalyze}
-                                        disabled={analyzing}
-                                    >
-                                        {analyzing ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                                                Analyzing...
-                                            </>
+                                        {remaining < 0 ? (
+                                            <AlertTriangle className="w-32 h-32 animate-bounce" />
                                         ) : (
-                                            "Track Meal"
+                                            <Scale className="w-32 h-32" />
                                         )}
-                                    </Button>
+                                    </div>
 
-                                    {analyzing && (
-                                        <div className="mt-6 space-y-4 p-4 border rounded-lg bg-gray-50/50 dark:bg-zinc-900/50">
-                                            <div className="space-y-2">
-                                                <Skeleton className="h-5 w-1/3" />
-                                                <Skeleton className="h-8 w-1/4" />
+                                    <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
+                                        <div className="space-y-1">
+                                            <div className="text-sm font-bold uppercase tracking-widest text-white/80">
+                                                {remaining < 0
+                                                    ? "Daily Limit Exceeded"
+                                                    : "Calories Eaten"}
                                             </div>
-                                            <div className="space-y-2">
-                                                <Skeleton className="h-4 w-full" />
-                                                <Skeleton className="h-4 w-5/6" />
+                                            <div className="text-7xl font-black tracking-tighter drop-shadow-md">
+                                                {todayCalories}
                                             </div>
                                         </div>
-                                    )}
 
-                                    {!analyzing && result && (
-                                        <div className="mt-6 bg-purple-50 dark:bg-purple-950/50 p-6 rounded-2xl border border-purple-100 dark:border-purple-800">
-                                            <h3 className="font-bold text-lg text-purple-900 dark:text-purple-100">
-                                                {result.short_title}
-                                            </h3>
-                                            <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
-                                                {result.total_calories} kcal
-                                            </div>
-
-                                            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
-                                                {result.summary}
-                                            </p>
-
-                                            {/* Breakdown of items */}
-                                            {result.items &&
-                                                result.items.length > 0 && (
-                                                    <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-800">
-                                                        <h4 className="font-semibold text-sm mb-2 opacity-70">
-                                                            Breakdown
-                                                        </h4>
-                                                        <ul className="space-y-1 text-sm">
-                                                            {result.items.map(
-                                                                (
-                                                                    item: any,
-                                                                    i: number
-                                                                ) => (
-                                                                    <li
-                                                                        key={i}
-                                                                        className="flex justify-between"
-                                                                    >
-                                                                        <span>
-                                                                            {
-                                                                                item.name
-                                                                            }
-                                                                        </span>
-                                                                        <span className="font-medium text-purple-600">
-                                                                            {
-                                                                                item.calories
-                                                                            }
-                                                                        </span>
-                                                                    </li>
-                                                                )
-                                                            )}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <div className="flex items-center justify-between px-1">
-                                <h2 className="text-xl font-semibold">
-                                    📅 Daily Log
-                                </h2>
-                                <div className="flex items-center bg-gray-100 dark:bg-zinc-800 rounded-full p-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-full"
-                                        onClick={goToPreviousDay}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-xs font-medium px-2 min-w-[80px] text-center">
-                                        {new Date(
-                                            currentDate
-                                        ).toLocaleDateString(undefined, {
-                                            month: "short",
-                                            day: "numeric",
-                                        })}
-                                        {currentDate ===
-                                            new Date()
-                                                .toISOString()
-                                                .split("T")[0] && " (Today)"}
-                                    </span>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-full"
-                                        onClick={goToNextDay}
-                                        disabled={
-                                            currentDate ===
-                                            new Date()
-                                                .toISOString()
-                                                .split("T")[0]
-                                        }
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                            <div className="space-y-6">
-                                {/* Replaced history with grouped view above */}
-                                {(
-                                    Object.entries(groupedMeals) as [
-                                        string,
-                                        Meal[]
-                                    ][]
-                                ).map(([mType, meals]) => (
-                                    <div key={mType} className="space-y-2">
-                                        <div className="flex justify-between items-center px-1">
-                                            <h3 className="font-semibold text-gray-500 uppercase tracking-wide text-xs">
-                                                {mType}
-                                            </h3>
-                                            <span className="text-xs font-bold">
-                                                {meals.reduce(
-                                                    (a, b) => a + b.calories,
-                                                    0
-                                                )}{" "}
-                                                kcal
-                                            </span>
-                                        </div>
-                                        {meals.length === 0 ? (
-                                            <div className="p-4 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl text-center text-xs text-gray-400">
-                                                No {mType} logged
-                                            </div>
-                                        ) : (
-                                            meals.map((meal) => (
-                                                <Card
-                                                    key={meal.id}
-                                                    className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-white dark:bg-zinc-900/50 shadow-sm"
+                                        {/* Progress Bar */}
+                                        <div className="w-full space-y-2">
+                                            <div
+                                                className={`h-6 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border ${
+                                                    remaining < 0
+                                                        ? "border-red-300/50 shadow-[0_0_15px_rgba(255,0,0,0.5)]"
+                                                        : "border-white/10"
+                                                }`}
+                                            >
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${
+                                                        remaining < 0
+                                                            ? "bg-gradient-to-r from-red-500 to-yellow-500 animate-barberpole w-full"
+                                                            : "bg-white"
+                                                    }`}
+                                                    style={{
+                                                        width:
+                                                            remaining < 0
+                                                                ? "100%"
+                                                                : `${Math.min(
+                                                                      progress,
+                                                                      100
+                                                                  )}%`,
+                                                    }}
                                                 >
-                                                    <div className="absolute bottom-2 right-2 flex gap-1">
+                                                    {remaining < 0 && (
+                                                        <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest animate-pulse">
+                                                            Overload
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-8 w-full mt-4">
+                                            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                                                <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
+                                                    Goal
+                                                </div>
+                                                <div className="text-2xl font-bold">
+                                                    {tdee}
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={`p-4 rounded-2xl backdrop-blur-sm border transition-colors duration-500 ${
+                                                    remaining < 0
+                                                        ? "bg-red-950/30 border-red-200/50 animate-pulse"
+                                                        : "bg-white/10 border-white/10"
+                                                }`}
+                                            >
+                                                <div className="text-[10px] uppercase tracking-wider font-bold mb-1 text-white/80">
+                                                    {remaining < 0
+                                                        ? "Over Limit"
+                                                        : "Remaining"}
+                                                </div>
+                                                <div className="text-2xl font-bold">
+                                                    {remaining < 0
+                                                        ? `+${Math.abs(
+                                                              remaining
+                                                          )}`
+                                                        : remaining}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    {/* ...existing code... */}
+                                    <CardContent className="pt-6">
+                                        <Tabs
+                                            value={mode}
+                                            onValueChange={(v) =>
+                                                setMode(v as any)
+                                            }
+                                        >
+                                            <TabsList className="grid w-full grid-cols-2 mb-4 bg-purple-50 dark:bg-purple-900/30 p-1 rounded-2xl">
+                                                <TabsTrigger
+                                                    value="photo"
+                                                    className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
+                                                >
+                                                    <Camera className="w-4 h-4 mr-2" />{" "}
+                                                    Photo Mode
+                                                </TabsTrigger>
+                                                <TabsTrigger
+                                                    value="text"
+                                                    className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-purple-950 data-[state=active]:shadow-sm"
+                                                >
+                                                    <Type className="w-4 h-4 mr-2" />{" "}
+                                                    Text Mode
+                                                </TabsTrigger>
+                                            </TabsList>
+
+                                            <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                                                {[
+                                                    "Breakfast",
+                                                    "Lunch",
+                                                    "Dinner",
+                                                    "Snack",
+                                                ].map((m) => (
+                                                    <Button
+                                                        key={m}
+                                                        variant={
+                                                            mealType === m
+                                                                ? "default"
+                                                                : "outline"
+                                                        }
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setMealType(
+                                                                m as any
+                                                            )
+                                                        }
+                                                        className={`rounded-full px-4 ${
+                                                            mealType === m
+                                                                ? "bg-purple-600 hover:bg-purple-700 text-white border-transparent"
+                                                                : "border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
+                                                        }`}
+                                                    >
+                                                        {m}
+                                                    </Button>
+                                                ))}
+                                            </div>
+
+                                            <TabsContent
+                                                value="photo"
+                                                className="space-y-4"
+                                            >
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleFileChange}
+                                                />
+                                                <input
+                                                    type="file"
+                                                    ref={cameraInputRef}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    capture="environment"
+                                                    onChange={handleFileChange}
+                                                />
+
+                                                {preview ? (
+                                                    <div className="relative rounded-2xl overflow-hidden border border-purple-100 dark:border-purple-800">
+                                                        <img
+                                                            src={preview}
+                                                            alt="Preview"
+                                                            className="w-full h-auto max-h-96 object-contain bg-black"
+                                                        />
                                                         <Button
-                                                            variant="ghost"
+                                                            variant="destructive"
                                                             size="icon"
-                                                            className="h-8 w-8 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                            className="absolute top-2 right-2 rounded-full shadow-lg"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setPreview("");
+                                                                setBase64Image(
+                                                                    ""
+                                                                );
+                                                            }}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div
+                                                            className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
                                                             onClick={() =>
-                                                                setEditingMeal(
-                                                                    meal
-                                                                )
+                                                                cameraInputRef.current?.click()
                                                             }
                                                         >
-                                                            <Pencil className="w-4 h-4" />
-                                                        </Button>
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger
-                                                                asChild
-                                                            >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>
-                                                                        Delete
-                                                                        Meal
-                                                                        Entry?
-                                                                    </AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        This
-                                                                        will
-                                                                        permanently
-                                                                        delete "
-                                                                        {
-                                                                            meal.food_name
-                                                                        }
-                                                                        " from
-                                                                        your
-                                                                        history.
-                                                                        This
-                                                                        action
-                                                                        cannot
-                                                                        be
-                                                                        undone.
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>
-                                                                        Cancel
-                                                                    </AlertDialogCancel>
-                                                                    <AlertDialogAction
-                                                                        onClick={() =>
-                                                                            deleteMeal(
-                                                                                meal.id
-                                                                            )
-                                                                        }
-                                                                        className="bg-red-500 hover:bg-red-600 text-white"
-                                                                    >
-                                                                        Delete
-                                                                    </AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
-                                                    </div>
-
-                                                    <CardContent className="p-4 flex justify-between items-start">
-                                                        <div className="pr-8">
-                                                            <h4 className="font-bold text-sm">
-                                                                {meal.food_name}
-                                                            </h4>
-                                                            {/* Breakdown in Daily Log */}
-                                                            {meal.items && (
-                                                                <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
-                                                                    {getSafeItems(
-                                                                        meal.items
-                                                                    ).map(
-                                                                        (
-                                                                            it: any,
-                                                                            idx: number
-                                                                        ) => (
-                                                                            <li
-                                                                                key={
-                                                                                    idx
-                                                                                }
-                                                                                className="flex gap-2"
-                                                                            >
-                                                                                <span>
-                                                                                    •{" "}
-                                                                                    {
-                                                                                        it.name
-                                                                                    }
-                                                                                </span>
-                                                                            </li>
-                                                                        )
-                                                                    )}
-                                                                </ul>
-                                                            )}
-
-                                                            <div className="text-xs text-gray-400 flex gap-2 mt-2">
-                                                                <span className="bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
-                                                                    {
-                                                                        meal.protein
-                                                                    }
-                                                                    g P
-                                                                </span>
-                                                                <span className="bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
-                                                                    {meal.carbs}
-                                                                    g C
-                                                                </span>
-                                                                <span className="bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-300">
-                                                                    {meal.fat}g
-                                                                    F
-                                                                </span>
+                                                            <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
+                                                                <Camera className="w-6 h-6" />
                                                             </div>
+                                                            <span className="font-medium">
+                                                                Take Photo
+                                                            </span>
                                                         </div>
-                                                        <div className="text-right shrink-0">
-                                                            <div className="font-bold text-lg text-purple-600 dark:text-purple-400 leading-none">
-                                                                {meal.calories}
+                                                        <div
+                                                            className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl p-6 text-center cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 flex flex-col items-center justify-center gap-3 h-40"
+                                                            onClick={() =>
+                                                                fileInputRef.current?.click()
+                                                            }
+                                                        >
+                                                            <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300">
+                                                                <Upload className="w-6 h-6" />
                                                             </div>
-                                                            <div className="text-[10px] text-gray-400">
-                                                                kcal
-                                                            </div>
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            ))
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === "history" && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <h2 className="text-2xl font-bold">History</h2>
-                            {/* Full History Grouped by Date */}
-                            {Object.entries(
-                                history.reduce((acc, meal) => {
-                                    (acc[meal.date] =
-                                        acc[meal.date] || []).push(meal);
-                                    return acc;
-                                }, {} as Record<string, Meal[]>)
-                            )
-                                .sort((a, b) => b[0].localeCompare(a[0]))
-                                .map(([date, meals]) => (
-                                    <Card
-                                        key={date}
-                                        className="p-4 border-none shadow-sm bg-white dark:bg-zinc-900/50"
-                                    >
-                                        <h3 className="font-bold text-gray-500 mb-4">
-                                            {new Date(date).toDateString()}
-                                        </h3>
-                                        <div className="space-y-3">
-                                            {meals.map((m) => (
-                                                <div
-                                                    key={m.id}
-                                                    className="flex justify-between text-sm items-center p-2 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                                                >
-                                                    <div>
-                                                        <div className="font-medium">
-                                                            {m.food_name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-400 capitalize">
-                                                            {m.meal_type}
+                                                            <span className="font-medium">
+                                                                Upload
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <span className="font-bold text-purple-600">
-                                                        {m.calories}
-                                                    </span>
+                                                )}
+                                            </TabsContent>
+
+                                            <TabsContent value="text">
+                                                <Textarea
+                                                    placeholder="Describe your meal..."
+                                                    value={textInput}
+                                                    onChange={(e) =>
+                                                        setTextInput(
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    className="h-32"
+                                                />
+                                            </TabsContent>
+                                        </Tabs>
+
+                                        <Button
+                                            className="w-full mt-4"
+                                            onClick={handleAnalyze}
+                                            disabled={analyzing}
+                                        >
+                                            {analyzing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                                                    Analyzing...
+                                                </>
+                                            ) : (
+                                                "Track Meal"
+                                            )}
+                                        </Button>
+
+                                        {analyzing && (
+                                            <div className="mt-6 space-y-4 p-4 border rounded-lg bg-gray-50/50 dark:bg-zinc-900/50">
+                                                <div className="space-y-2">
+                                                    <Skeleton className="h-5 w-1/3" />
+                                                    <Skeleton className="h-8 w-1/4" />
                                                 </div>
-                                            ))}
-                                            <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-2 flex justify-between font-bold">
-                                                <span>Total</span>
-                                                <span>
+                                                <div className="space-y-2">
+                                                    <Skeleton className="h-4 w-full" />
+                                                    <Skeleton className="h-4 w-5/6" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!analyzing && result && (
+                                            <div className="mt-6 bg-purple-50 dark:bg-purple-950/50 p-6 rounded-2xl border border-purple-100 dark:border-purple-800">
+                                                <h3 className="font-bold text-lg text-purple-900 dark:text-purple-100">
+                                                    {result.short_title}
+                                                </h3>
+                                                <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-fuchsia-600 my-2">
+                                                    {result.total_calories} kcal
+                                                </div>
+
+                                                <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
+                                                    {result.summary}
+                                                </p>
+
+                                                {/* Breakdown of items */}
+                                                {result.items &&
+                                                    result.items.length > 0 && (
+                                                        <div className="mt-4 pt-4 border-t border-purple-200 dark:border-purple-800">
+                                                            <h4 className="font-semibold text-sm mb-2 opacity-70">
+                                                                Breakdown
+                                                            </h4>
+                                                            <ul className="space-y-1 text-sm">
+                                                                {result.items.map(
+                                                                    (
+                                                                        item: any,
+                                                                        i: number
+                                                                    ) => (
+                                                                        <li
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            className="flex justify-between"
+                                                                        >
+                                                                            <span>
+                                                                                {
+                                                                                    item.name
+                                                                                }
+                                                                            </span>
+                                                                            <span className="font-medium text-purple-600">
+                                                                                {
+                                                                                    item.calories
+                                                                                }
+                                                                            </span>
+                                                                        </li>
+                                                                    )
+                                                                )}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <div className="flex items-center justify-between px-1">
+                                    <h2 className="text-xl font-semibold">
+                                        📅 Daily Log
+                                    </h2>
+                                    <div className="flex items-center bg-gray-100 dark:bg-zinc-800 rounded-full p-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full"
+                                            onClick={goToPreviousDay}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-xs font-medium px-2 min-w-[80px] text-center">
+                                            {new Date(
+                                                currentDate
+                                            ).toLocaleDateString(undefined, {
+                                                month: "short",
+                                                day: "numeric",
+                                            })}
+                                            {currentDate ===
+                                                new Date()
+                                                    .toISOString()
+                                                    .split("T")[0] &&
+                                                " (Today)"}
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full"
+                                            onClick={goToNextDay}
+                                            disabled={
+                                                currentDate ===
+                                                new Date()
+                                                    .toISOString()
+                                                    .split("T")[0]
+                                            }
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    {/* Replaced history with grouped view above */}
+                                    {(
+                                        Object.entries(groupedMeals) as [
+                                            string,
+                                            Meal[]
+                                        ][]
+                                    ).map(([mType, meals]) => (
+                                        <div key={mType} className="space-y-2">
+                                            <div className="flex justify-between items-center px-1">
+                                                <h3 className="font-semibold text-gray-500 uppercase tracking-wide text-xs">
+                                                    {mType}
+                                                </h3>
+                                                <span className="text-xs font-bold">
                                                     {meals.reduce(
                                                         (a, b) =>
-                                                            a +
-                                                            Number(b.calories),
+                                                            a + b.calories,
                                                         0
                                                     )}{" "}
                                                     kcal
                                                 </span>
                                             </div>
-                                        </div>
-                                    </Card>
-                                ))}
-                        </div>
-                    )}
+                                            {meals.length === 0 ? (
+                                                <div className="p-4 border border-dashed border-gray-200 dark:border-gray-800 rounded-2xl text-center text-xs text-gray-400">
+                                                    No {mType} logged
+                                                </div>
+                                            ) : (
+                                                meals.map((meal) => (
+                                                    <Card
+                                                        key={meal.id}
+                                                        className="relative overflow-hidden group hover:shadow-md transition-all border-none bg-white dark:bg-zinc-900/50 shadow-sm"
+                                                    >
+                                                        <div className="absolute bottom-2 right-2 flex gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                                onClick={() =>
+                                                                    setEditingMeal(
+                                                                        meal
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Pencil className="w-4 h-4" />
+                                                            </Button>
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>
+                                                                            Delete
+                                                                            Meal
+                                                                            Entry?
+                                                                        </AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            This
+                                                                            will
+                                                                            permanently
+                                                                            delete
+                                                                            "
+                                                                            {
+                                                                                meal.food_name
+                                                                            }
+                                                                            "
+                                                                            from
+                                                                            your
+                                                                            history.
+                                                                            This
+                                                                            action
+                                                                            cannot
+                                                                            be
+                                                                            undone.
+                                                                        </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>
+                                                                            Cancel
+                                                                        </AlertDialogCancel>
+                                                                        <AlertDialogAction
+                                                                            onClick={() =>
+                                                                                deleteMeal(
+                                                                                    meal.id
+                                                                                )
+                                                                            }
+                                                                            className="bg-red-500 hover:bg-red-600 text-white"
+                                                                        >
+                                                                            Delete
+                                                                        </AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </div>
 
-                    {activeTab === "weight" && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <h2 className="text-2xl font-bold">
-                                Weight Tracker
-                            </h2>
-                            <Card className="p-6 border-none shadow-sm bg-white dark:bg-zinc-900/50">
-                                <h3 className="font-medium mb-4">Log Weight</h3>
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <Input
-                                            type="number"
-                                            placeholder="Weight"
-                                            value={newWeight}
-                                            onChange={(e) =>
-                                                setNewWeight(e.target.value)
-                                            }
-                                            className="pr-12"
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-                                            kg
-                                        </span>
-                                    </div>
-                                    <Button
-                                        onClick={handleAddWeight}
-                                        className="bg-purple-600 hover:bg-purple-700"
-                                    >
-                                        Log
-                                    </Button>
+                                                        <CardContent className="p-4 flex justify-between items-start">
+                                                            <div className="pr-8">
+                                                                <h4 className="font-bold text-sm">
+                                                                    {
+                                                                        meal.food_name
+                                                                    }
+                                                                </h4>
+                                                                {/* Breakdown in Daily Log */}
+                                                                {meal.items && (
+                                                                    <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                        {getSafeItems(
+                                                                            meal.items
+                                                                        ).map(
+                                                                            (
+                                                                                it: any,
+                                                                                idx: number
+                                                                            ) => (
+                                                                                <li
+                                                                                    key={
+                                                                                        idx
+                                                                                    }
+                                                                                    className="flex gap-2"
+                                                                                >
+                                                                                    <span>
+                                                                                        •{" "}
+                                                                                        {
+                                                                                            it.name
+                                                                                        }
+                                                                                    </span>
+                                                                                </li>
+                                                                            )
+                                                                        )}
+                                                                    </ul>
+                                                                )}
+
+                                                                <div className="text-xs text-gray-400 flex gap-2 mt-2">
+                                                                    <span className="bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
+                                                                        {
+                                                                            meal.protein
+                                                                        }
+                                                                        g P
+                                                                    </span>
+                                                                    <span className="bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
+                                                                        {
+                                                                            meal.carbs
+                                                                        }
+                                                                        g C
+                                                                    </span>
+                                                                    <span className="bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-300">
+                                                                        {
+                                                                            meal.fat
+                                                                        }
+                                                                        g F
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right shrink-0">
+                                                                <div className="font-bold text-lg text-purple-600 dark:text-purple-400 leading-none">
+                                                                    {
+                                                                        meal.calories
+                                                                    }
+                                                                </div>
+                                                                <div className="text-[10px] text-gray-400">
+                                                                    kcal
+                                                                </div>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                            </Card>
-
-                            <div className="space-y-3">
-                                <h3 className="font-medium text-gray-500">
-                                    History
-                                </h3>
-                                {weightLogs.length === 0 ? (
-                                    <div className="text-center p-8 text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
-                                        No weight logs yet
-                                    </div>
-                                ) : (
-                                    weightLogs.map((log) => (
-                                        <div
-                                            key={log.id}
-                                            className="flex justify-between items-center p-4 bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-gray-800"
-                                        >
-                                            <span className="font-medium">
-                                                {new Date(
-                                                    log.date
-                                                ).toLocaleDateString()}
-                                            </span>
-                                            <span className="font-bold text-purple-600">
-                                                {log.weight} kg
-                                            </span>
-                                        </div>
-                                    ))
-                                )}
                             </div>
-                        </div>
-                    )}
+                        )}
 
+                        {activeTab === "history" && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <h2 className="text-2xl font-bold">History</h2>
+                                <Tabs
+                                    value={historyTab}
+                                    onValueChange={(v) =>
+                                        setHistoryTab(v as "meals" | "charts")
+                                    }
+                                >
+                                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                                        <TabsTrigger value="meals">
+                                            Meal History
+                                        </TabsTrigger>
+                                        <TabsTrigger value="charts">
+                                            Charts & Trends
+                                        </TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent
+                                        value="meals"
+                                        className="space-y-4"
+                                    >
+                                        {/* Full History Grouped by Date */}
+                                        {(() => {
+                                            const groupedMeals = history.reduce(
+                                                (acc, meal) => {
+                                                    (acc[meal.date] =
+                                                        acc[meal.date] ||
+                                                        []).push(meal);
+                                                    return acc;
+                                                },
+                                                {} as Record<string, Meal[]>
+                                            );
 
+                                            const allDates = Array.from(
+                                                new Set(
+                                                    Object.keys(groupedMeals)
+                                                )
+                                            ).sort((a, b) =>
+                                                b.localeCompare(a)
+                                            );
+
+                                            return allDates.map((date) => {
+                                                const meals =
+                                                    groupedMeals[date] || [];
+
+                                                return (
+                                                    <Card
+                                                        key={date}
+                                                        className="p-4 border-none shadow-sm bg-white dark:bg-zinc-900/50"
+                                                    >
+                                                        <h3 className="font-bold text-gray-500 mb-4">
+                                                            {new Date(
+                                                                date
+                                                            ).toDateString()}
+                                                        </h3>
+                                                        <div className="space-y-3">
+                                                            {meals.map((m) => (
+                                                                <div
+                                                                    key={m.id}
+                                                                    className="flex justify-between text-sm items-center p-2 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                                                                >
+                                                                    <div>
+                                                                        <div className="font-medium">
+                                                                            {
+                                                                                m.food_name
+                                                                            }
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-400 capitalize">
+                                                                            {
+                                                                                m.meal_type
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="font-bold text-purple-600">
+                                                                        {
+                                                                            m.calories
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+
+                                                            {meals.length >
+                                                                0 && (
+                                                                <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-2 flex justify-between font-bold">
+                                                                    <span>
+                                                                        Total
+                                                                        Calories
+                                                                    </span>
+                                                                    <span>
+                                                                        {meals.reduce(
+                                                                            (
+                                                                                a,
+                                                                                b
+                                                                            ) =>
+                                                                                a +
+                                                                                Number(
+                                                                                    b.calories
+                                                                                ),
+                                                                            0
+                                                                        )}{" "}
+                                                                        kcal
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </Card>
+                                                );
+                                            });
+                                        })()}
+                                    </TabsContent>
+                                    <TabsContent value="charts">
+                                        <Charts user={user} />
+                                    </TabsContent>
+                                </Tabs>
+                            </div>
+                        )}
+
+                        {activeTab === "weight" && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <h2 className="text-2xl font-bold">
+                                    Weight Tracker
+                                </h2>
+
+                                {/* Log Weight Card */}
+                                <Card className="border-none shadow-lg bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/20">
+                                    <CardContent className="p-6">
+                                        <h3 className="font-semibold mb-4 flex items-center gap-2">
+                                            <Scale className="w-5 h-5 text-purple-600" />
+                                            Log Your Weight
+                                        </h3>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Input
+                                                    type="number"
+                                                    step="0.1"
+                                                    placeholder="Enter weight"
+                                                    value={newWeight}
+                                                    onChange={(e) =>
+                                                        setNewWeight(
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    className="pr-12 bg-white dark:bg-zinc-900"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                                                    kg
+                                                </span>
+                                            </div>
+                                            <Button
+                                                onClick={handleAddWeight}
+                                                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                                            >
+                                                <Plus className="w-4 h-4 mr-1" />
+                                                Log
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Weight Trend Chart */}
+                                <Card className="border-none shadow-lg bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl">
+                                    <CardContent className="p-6">
+                                        <h3 className="font-semibold mb-4">
+                                            Weight Trend
+                                        </h3>
+                                        <WeightChart />
+                                    </CardContent>
+                                </Card>
+
+                                {/* Weight History */}
+                                <Card className="border-none shadow-lg bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl">
+                                    <CardContent className="p-6">
+                                        <h3 className="font-semibold mb-4">
+                                            Recent Logs
+                                        </h3>
+                                        {weightLogs.length === 0 ? (
+                                            <div className="text-center py-12 text-muted-foreground space-y-2">
+                                                <Scale className="w-12 h-12 mx-auto opacity-20" />
+                                                <p>No weight logs yet</p>
+                                                <p className="text-xs">
+                                                    Start tracking your progress
+                                                    above
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {weightLogs
+                                                    .slice(0, 10)
+                                                    .map((log) => (
+                                                        <div
+                                                            key={log.id}
+                                                            className="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-xl border border-purple-100 dark:border-purple-900/30"
+                                                        >
+                                                            <span className="text-sm text-muted-foreground">
+                                                                {new Date(
+                                                                    log.date
+                                                                ).toLocaleDateString(
+                                                                    "en-US",
+                                                                    {
+                                                                        weekday:
+                                                                            "short",
+                                                                        month: "short",
+                                                                        day: "numeric",
+                                                                    }
+                                                                )}
+                                                            </span>
+                                                            <span className="font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                                                {log.weight} kg
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
             )}
@@ -1282,7 +1580,10 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                             e.preventDefault();
                                             updateEditItems([
                                                 ...editItems,
-                                                { name: "New Item", calories: 0 },
+                                                {
+                                                    name: "New Item",
+                                                    calories: 0,
+                                                },
                                             ]);
                                         }}
                                     >
@@ -1299,7 +1600,9 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                 className="h-8 text-sm flex-1"
                                                 value={item.name}
                                                 onChange={(e) => {
-                                                    const newItems = [...editItems];
+                                                    const newItems = [
+                                                        ...editItems,
+                                                    ];
                                                     newItems[idx].name =
                                                         e.target.value;
                                                     updateEditItems(newItems);
@@ -1310,10 +1613,11 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                                 type="number"
                                                 value={item.calories}
                                                 onChange={(e) => {
-                                                    const newItems = [...editItems];
-                                                    newItems[idx].calories = Number(
-                                                        e.target.value
-                                                    );
+                                                    const newItems = [
+                                                        ...editItems,
+                                                    ];
+                                                    newItems[idx].calories =
+                                                        Number(e.target.value);
                                                     updateEditItems(newItems);
                                                 }}
                                             />
@@ -1337,7 +1641,8 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                                     ))}
                                     {editItems.length === 0 && (
                                         <p className="text-xs text-center text-gray-400 py-2 border border-dashed rounded-lg">
-                                            No items listed. Add one to track details.
+                                            No items listed. Add one to track
+                                            details.
                                         </p>
                                     )}
                                 </div>
@@ -1367,6 +1672,29 @@ export function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
                         </div>
                     </motion.div>
                 </div>
+            )}
+
+            {/* Gamification Modal */}
+            {showGamification && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowGamification(false)}
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                >
+                    <motion.div
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0.9, y: 20 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-background rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl"
+                    >
+                        <Gamification
+                            onBack={() => setShowGamification(false)}
+                        />
+                    </motion.div>
+                </motion.div>
             )}
         </AnimatePresence>
     );

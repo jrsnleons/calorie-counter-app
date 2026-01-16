@@ -1,20 +1,20 @@
+import { Auth } from "@/components/Auth";
 import { Dashboard } from "@/components/Dashboard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LandingPage } from "@/components/LandingPage";
 import { NotFound } from "@/components/NotFound";
+import { Onboarding } from "@/components/Onboarding";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import "@/lib/api-interceptor";
 import type { User } from "@/types";
-import { useEffect, useState } from "react";
+import { ComponentType, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import {
     Navigate,
     Route,
     BrowserRouter as Router,
     Routes,
 } from "react-router-dom";
-import { Auth } from "./components/Auth";
-import { Onboarding } from "./components/Onboarding";
 
 function App() {
     return (
@@ -33,38 +33,42 @@ function AppContent() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetch("/api/me")
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.loggedIn) setUser(data.user);
-                setLoading(false);
-            })
-            .catch(() => setLoading(false));
-    }, []);
-
     const checkUser = async () => {
         try {
-            const res = await fetch("/api/me");
+            const res = await apiFetch("/api/me");
             if (res.ok) {
                 const data = await res.json();
                 if (data.loggedIn) setUser(data.user);
                 else setUser(null);
-            } else {
-                setUser(null);
             }
-        } catch {
-            setUser(null);
+        } catch (e) {
+            console.error("Auth check failed", e);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
+    };
+
+    useEffect(() => {
+        checkUser();
+    }, []);
+
+    const handleLoginSuccess = () => {
+        setLoading(true);
+        checkUser();
     };
 
     const handleOnboardingComplete = async (data: any) => {
         try {
-            const res = await fetch("/api/user/onboarding", {
+            // Map 'activity' to 'activity_level' for the backend
+            const payload = {
+                ...data,
+                activity_level: data.activity,
+            };
+            
+            const res = await apiFetch("/api/user/onboarding", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error("Failed to save profile");
             checkUser(); // Refresh user data to get tdee
@@ -92,11 +96,7 @@ function AppContent() {
             <Route
                 path="/"
                 element={
-                    user ? (
-                        <Navigate to="/home" replace />
-                    ) : (
-                        <LandingPage />
-                    )
+                    user ? <Navigate to="/home" replace /> : <LandingPage />
                 }
             />
 
@@ -107,7 +107,7 @@ function AppContent() {
                     user ? (
                         <Navigate to="/home" replace />
                     ) : (
-                        <Auth onLogin={() => window.location.reload()} />
+                        <Auth onLogin={handleLoginSuccess} />
                     )
                 }
             />
@@ -125,7 +125,6 @@ function AppContent() {
                             user={user}
                             onLogout={() => {
                                 setUser(null);
-                                window.location.href = "/";
                             }}
                             onUpdateUser={checkUser}
                         />

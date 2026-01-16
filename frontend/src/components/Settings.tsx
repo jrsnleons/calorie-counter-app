@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { apiQueue } from "@/lib/api-queue";
 import type { User } from "@/types";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Target } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useTheme } from "./theme-provider";
@@ -21,9 +21,17 @@ interface SettingsProps {
     user: User;
     onBack: () => void;
     onUpdateUser: () => void;
+    onNavigateToWeight: () => void;
+    onNavigateToGoal: () => void;
 }
 
-export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
+export function Settings({
+    user,
+    onBack,
+    onUpdateUser,
+    onNavigateToWeight,
+    onNavigateToGoal,
+}: SettingsProps) {
     const { theme, setTheme } = useTheme();
     const [loading, setLoading] = useState(false);
 
@@ -53,9 +61,22 @@ export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
 
                 if (res.ok) {
                     const data = await res.json();
-                    toast.success(
-                        `Profile updated! New Daily Goal: ${data.tdee} kcal`
-                    );
+                    toast.success("Profile details updated.");
+
+                    if (
+                        data.suggestedTDEE &&
+                        Math.abs(data.suggestedTDEE - (user.tdee || 2000)) > 50
+                    ) {
+                        toast("Update Calorie Goal?", {
+                            description: `Based on your new stats, your goal could be ${data.suggestedTDEE} kcal.`,
+                            action: {
+                                label: "Adjust Goal",
+                                onClick: onNavigateToGoal,
+                            },
+                            duration: 8000,
+                        });
+                    }
+
                     onUpdateUser(); // Refresh parent state without reload
                 } else {
                     toast.error("Failed to update profile");
@@ -69,7 +90,7 @@ export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
     };
 
     return (
-        <div className="max-w-md mx-auto p-4 space-y-6 pb-20">
+        <div className="max-w-4xl mx-auto p-4 space-y-6 pb-20">
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
                     <Button
@@ -176,17 +197,26 @@ export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
                         </div>
                         <div className="space-y-2">
                             <Label>Weight (kg)</Label>
-                            <Input
-                                type="number"
-                                placeholder="e.g. 70"
-                                value={formData.weight}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        weight: e.target.value,
-                                    })
-                                }
-                            />
+                            <div className="flex gap-2">
+                                <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-50">
+                                    {formData.weight}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => {
+                                        onBack();
+                                        onNavigateToWeight();
+                                    }}
+                                    title="Update in Weight Tab"
+                                >
+                                    <Target className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                                Update via Weight Tab to track history
+                            </p>
                         </div>
                     </div>
 
@@ -220,6 +250,28 @@ export function Settings({ user, onBack, onUpdateUser }: SettingsProps) {
                         </select>
                     </div>
                 </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl border-none shadow-lg shadow-green-200/50 dark:shadow-none bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 backdrop-blur-xl">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2">
+                                <Target className="w-5 h-5 text-green-600" />
+                                Goal Adjustment
+                            </CardTitle>
+                            <CardDescription>
+                                Fine-tune your calorie goals based on progress
+                            </CardDescription>
+                        </div>
+                        <Button
+                            onClick={onNavigateToGoal}
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                        >
+                            Adjust Goal
+                        </Button>
+                    </div>
+                </CardHeader>
             </Card>
 
             <Card className="rounded-3xl border-none shadow-lg shadow-purple-200/50 dark:shadow-none bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl">

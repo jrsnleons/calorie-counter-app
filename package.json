@@ -3,23 +3,30 @@
     "version": "1.0.0",
     "dependencies": {
         "@google/generative-ai": "^0.24.1",
+        "@tiptap/core": "^3.15.3",
+        "@tiptap/pm": "^3.15.3",
+        "@types/bcryptjs": "^2.4.6",
+        "@types/connect-pg-simple": "^7.0.3",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/express-rate-limit": "^6.0.2",
+        "@types/express-session": "^1.18.2",
+        "@types/helmet": "^4.0.0",
+        "@types/node": "^25.0.5",
+        "@types/pg": "^8.16.0",
         "bcryptjs": "^3.0.3",
         "connect-pg-simple": "^10.0.0",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
         "express": "^5.2.1",
+        "express-rate-limit": "^8.2.1",
         "express-session": "^1.18.2",
         "google-auth-library": "^10.5.0",
+        "helmet": "^8.1.0",
         "pg": "^8.13.1",
-        "@types/bcryptjs": "^2.4.6",
-        "@types/connect-pg-simple": "^7.0.3",
-        "@types/cors": "^2.8.19",
-        "@types/express": "^5.0.6",
-        "@types/express-session": "^1.18.2",
-        "@types/node": "^25.0.5",
-        "@types/pg": "^8.16.0",
-        "ts-node": "^10.9.2",
-        "typescript": "^5.9.3"
+        "tslib": "^2.8.1",
+        "typescript": "^5.9.3",
+        "zod": "^4.3.5"
     },
     "scripts": {
         "start": "node dist/setup_db.js && node dist/server.js",
@@ -27,5 +34,7 @@
         "build": "tsc",
         "db:setup": "ts-node src/setup_db.ts"
     },
-    "devDependencies": {}
+    "devDependencies": {
+        "ts-node": "^10.9.2"
+    }
 }
