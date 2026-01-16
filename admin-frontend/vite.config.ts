@@ -1,6 +1,6 @@
 
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -17,6 +17,12 @@ export default defineConfig({
   preview: {
     port: 4173,
     host: true,
-    allowedHosts: ["admin-pakals.up.railway.app"]
+    allowedHosts: ["admin-pakals.up.railway.app"],
+    proxy: {
+        '/api': {
+            target: 'https://backend-server-production-44a5.up.railway.app',
+            changeOrigin: true,
+        }
+    }
   }
 })
